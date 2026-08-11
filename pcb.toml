@@ -1,0 +1,25 @@
+[workspace]
+name = "joust"
+
+[board]
+name = "Joust"
+path = "Joust.zen"
+description = "Handheld jostle-detection game wand: NORA-B206 BLE module, LSM6DSOX accel (gyro unused), LiPo charge/power path, ERM haptic, celebration LEDs."
+
+[dependencies]
+"github.com/diodeinc/registry/components/2N7002" = "0.4.2"
+"github.com/diodeinc/registry/components/Diodes_Incorporated/1N4148W-7-F" = "0.3.1"
+"github.com/diodeinc/registry/components/JS202011SCQN" = "0.4.1"
+"github.com/diodeinc/registry/components/Richtek_USA_Inc/RT9013-33GB" = "0.2.1"
+"github.com/diodeinc/registry/components/Texas_Instruments/BQ25185DLH" = "0.2.11"
+"github.com/diodeinc/registry/connectors/JstPh" = "0.3.2"
+"github.com/diodeinc/registry/connectors/TagConnect" = "0.2.0"
+"github.com/diodeinc/registry/modules/UsbCSink16P" = "0.2.5"
+"github.com/diodeinc/registry/reference/LSM6DSOXx" = "0.4.3"
+"github.com/diodeinc/registry/reference/NORAB2x" = "0.3.3"
+
+[dependencies.indirect]
+"github.com/diodeinc/registry/components/STMicroelectronics/LSM6DSOXTR@0.4" = "0.4.1"
+"github.com/diodeinc/registry/components/TPD4E05U06QDQARQ1@0.5" = "0.5.2"
+"github.com/diodeinc/registry/components/u-blox/NORA-B206-00B@0.3" = "0.3.1"
+"github.com/diodeinc/registry/connectors/UsbC16P@0.2" = "0.2.2"

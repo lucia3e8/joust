@@ -1,0 +1,118 @@
+"""Joust — handheld jostle-detection game wand.
+
+Player unit per spec.md: LSM6DSOX accelerometer (gyro unused) wakes the
+NORA-B206 (nRF54L15) BLE module on a jostle; events go out as connectionless
+advertisements. The base station's periodic-advertising beacon provides the
+shared clock and the winner command, which fires the LEDs and ERM haptic.
+
+Power: USB-C (charge only) → BQ25185 linear charger/power path → VSYS.
+Slide switch gates the 3.3 V LDO EN (no load current through the switch).
+Motor and LEDs run from VSYS; logic runs from the switched 3.3 V rail.
+"""
+
+load("@stdlib/interfaces.zen", "Gpio", "I2c", "Swd", "UsbTypeC")
+
+UsbCSink = Module("github.com/diodeinc/registry/modules/UsbCSink16P/UsbCSink16P.zen")
+Charger = Module("github.com/diodeinc/registry/components/Texas_Instruments/BQ25185DLH/BQ25185DLH.zen")
+Ldo = Module("github.com/diodeinc/registry/components/Richtek_USA_Inc/RT9013-33GB/RT9013-33GB.zen")
+Ble = Module("github.com/diodeinc/registry/reference/NORAB2x/NORAB2x.zen")
+Accel = Module("github.com/diodeinc/registry/reference/LSM6DSOXx/LSM6DSOXx.zen")
+JstPh = Module("github.com/diodeinc/registry/connectors/JstPh/JstPh.zen")
+SlideSwitch = Module("github.com/diodeinc/registry/components/JS202011SCQN/JS202011SCQN.zen")
+Fet = Module("github.com/diodeinc/registry/components/2N7002/2N7002.zen")
+Flyback = Module("github.com/diodeinc/registry/components/Diodes_Incorporated/1N4148W-7-F/1N4148W-7-F.zen")
+SwdConnector = Module("github.com/diodeinc/registry/connectors/TagConnect/TC2030-NL_SWD.zen")
+Led = Module("@stdlib/generics/Led.zen")
+Resistor = Module("@stdlib/generics/Resistor.zen")
+
+Board(name="Joust", layout_path="layout/Joust", layers=2)
+
+VBUS = Power("VBUS", voltage="5V")
+VBAT = Power("VBAT", voltage="3.0V to 4.2V")
+VSYS = Power("VSYS", voltage="3.0V to 4.65V")
+V3V3 = Power("V3V3", voltage="3.3V")
+GND = Ground("GND")
+
+LDO_EN = Net("LDO_EN")
+I2C = I2c("I2C")
+SWD = Swd("SWD")
+RESET_N = Net("RESET_N")
+ACC_INT = Gpio("ACC_INT")
+MOT_GATE = Gpio("MOT_GATE")
+LED_GATE = Gpio("LED_GATE")
+MOT_SW = Net("MOT_SW")
+LED_K = Net("LED_K")
+LED1_A = Net("LED1_A")
+LED2_A = Net("LED2_A")
+
+# USB-C charge-only input (D+/D- unused; CC pull-downs request 5 V / 500 mA)
+UsbCSink(name="USB", USB_C=UsbTypeC("USB_C"), VBUS=VBUS, GND=GND)
+
+# Charger + power path. 125 mA = 0.5 C for the 250 mAh cell (spec D4).
+# CE tied to GND = charging always enabled when input present.
+Charger(
+    name="CHG",
+    VIN=VBUS,
+    SYS=VSYS,
+    BAT=VBAT,
+    GND=GND,
+    CE=GND,
+    charge_current="125mA",
+    battery_regulation="4.2V",
+    input_current_limit="500mA",
+)
+
+# Battery: 250 mAh 1S LiPo with protection PCM, JST PH 2-pos
+JstPh(name="J_BAT", pin_count="2", P1=VBAT, P2=GND, MP=GND)
+
+# Power switch on the LDO EN pin — no load current through the switch.
+# DPDT poles paralleled: common (2/5) → EN, ON throw (1/4) → VSYS,
+# OFF throw (3/6) → GND (redundant with the LDO's EN pulldown strap).
+SlideSwitch(name="SW_PWR", P1=VSYS, P2=LDO_EN, P3=GND, P4=VSYS, P5=LDO_EN, P6=GND)
+
+# 3.3 V logic rail (NORA-B206 VCC max is 3.5 V, so LiPo cannot drive it directly)
+Ldo(name="LDO", VIN=VSYS, VOUT=V3V3, GND=GND, EN=LDO_EN, en_strap="PULLDOWN")
+
+# BLE module (nRF54L15, integrated antenna, pre-certified)
+Ble(
+    name="BLE",
+    VCC=V3V3,
+    GND=GND,
+    I2C=I2C,
+    SWD=SWD,
+    RESET_N=RESET_N,
+    GPIO_P0_04=ACC_INT,
+    GPIO_P1_09=MOT_GATE,
+    GPIO_P1_10=LED_GATE,
+)
+
+# Accelerometer (LSM6DSOX used accel-only; gyro stays powered down).
+# Wake-up interrupt engine drives INT1. I2C pull-ups live in the BLE module.
+Accel(
+    name="ACC",
+    VDD=V3V3,
+    VDDIO=V3V3,
+    GND=GND,
+    I2C=I2C,
+    INT1=ACC_INT,
+    i2c_pullup=False,
+)
+
+# ERM haptic motor (off-board, JST PH 2-pos), low-side switched from VSYS
+JstPh(name="J_MOT", pin_count="2", P1=VSYS, P2=MOT_SW, MP=GND)
+Fet(name="Q_MOT", variant="2N7002K", GATE=MOT_GATE.NET, DRAIN=MOT_SW, SOURCE=GND)
+Flyback(name="D_MOT", A=MOT_SW, C=VSYS)
+Resistor(name="R_MOT_PD", value="100kohm", package="0402", P1=MOT_GATE.NET, P2=GND)
+
+# Celebration LEDs: two red LEDs from VSYS, low-side switched.
+# 120 Ω → ~15 mA at 3.7 V; 22 mA worst case at VSYS_REG 4.5 V (USB present),
+# under the KP-1608SURCK 30 mA abs max with margin.
+Resistor(name="R_LED1", value="120ohm", package="0402", P1=VSYS, P2=LED1_A)
+Led(name="D_LED1", color="red", package="0603", mpn="KP-1608SURCK", manufacturer="Kingbright", A=LED1_A, K=LED_K)
+Resistor(name="R_LED2", value="120ohm", package="0402", P1=VSYS, P2=LED2_A)
+Led(name="D_LED2", color="red", package="0603", mpn="KP-1608SURCK", manufacturer="Kingbright", A=LED2_A, K=LED_K)
+Fet(name="Q_LED", variant="2N7002K", GATE=LED_GATE.NET, DRAIN=LED_K, SOURCE=GND)
+Resistor(name="R_LED_PD", value="100kohm", package="0402", P1=LED_GATE.NET, P2=GND)
+
+# Programming/debug: Tag-Connect TC2030-NL (zero BOM cost)
+SwdConnector(name="J_SWD", VSENSE=V3V3, GND=GND, SWD=SWD, NRST=RESET_N, SWO=Net("SWO"))
