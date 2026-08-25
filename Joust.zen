@@ -25,7 +25,7 @@ SwdConnector = Module("github.com/diodeinc/registry/connectors/TagConnect/TC2030
 Led = Module("@stdlib/generics/Led.zen")
 Resistor = Module("@stdlib/generics/Resistor.zen")
 
-Board(name="Joust", layout_path="layout/Joust", layers=2)
+Board(name="Joust", layout_path="layout/Joust", layers=4)
 
 VBUS = Power("VBUS", voltage="5V")
 VBAT = Power("VBAT", voltage="3.0V to 4.2V")
