@@ -1,0 +1,186 @@
+"""TPS22919 — TI 5.5 V, 1.5 A load switch with controlled slew rate and QOD, SC-70-6 (DCK).
+
+One gated power rail: the TPS22919 plus the passives its datasheet application
+circuit (Figure 30) calls for — input bypass, local output bypass, the QOD
+strap that sets the off-state discharge path, and an external ON pull-down
+that makes "off" the powered-up default.
+
+Variant selection (`automotive`)
+
+    automotive  MPN                 Grade                 Alternates
+    False       TPS22919DCKR        catalog, -40 to 105 C  TPS22919DCKT (250-pc T&R)
+    True        TPS22919QDCKRQ1     AEC-Q100 grade 1       —
+
+Both are SC-70-6 (DCK), pin-identical (1=IN, 2=GND, 3=ON, 4=NC, 5=QOD,
+6=OUT), and carry the same electrical and switching specifications
+(TPS22919 SLVSENSB §6 vs the TPS22919-Q1 datasheet §6); only qualification
+and guaranteed ambient range differ.
+
+Slew rate is fixed silicon on this device — TI ships no pin-compatible
+SC-70-6 sibling with a different rise time or a different internal QOD
+resistance. The adjustable-rise-time relatives (TPS22917, TPS22918, with a
+CT pin) are SOT-23-6 with a different pinout, so they need their own
+package. Configure fall time here with `discharge` / `r_qod`.
+
+Operating envelope (SLVSENSB §6.1, §6.3, §6.5)
+- VIN 1.6 V to 5.5 V (abs max 6 V). VOUT tracks VIN when enabled.
+- 1.5 A continuous, 2.5 A pulsed (2 ms, 2 % duty).
+- R_ON 89 mOhm typ at 5 V, 90 mOhm at 3.6 V, 105 mOhm at 1.8 V;
+  150 mOhm max at 5 V over -40 to 85 C.
+- Self-protected: I_SC 3 A typ into a soft short, folded back to 500 mA typ
+  once VIN - VOUT exceeds V_SC (0.36 V typ), 2 us response, then thermal
+  shutdown at 180 C with 35 C hysteresis. There is no fault flag output.
+- R_theta_JA is 210.7 C/W in this package (§6.4), so dissipation dominates
+  the usable current, not R_ON: 1.5 A continuous burns 0.34 W at 150 mOhm
+  and lifts T_J by ~71 C. Loads up to a few hundred mA are thermally free
+  (360 mA -> 54 mV drop, 19 mW, ~4 C rise).
+
+ON control (§8.3.1)
+- V_IH >= 1 V, V_IL <= 0.35 V, referenced to GND and independent of VIN, so
+  a 3.3 V GPIO can gate a 5 V rail directly. Abs max V_ON is 6 V.
+- The internal Smart Pull Down (530 kOhm typ) holds ON low only until ON is
+  first driven high, after which it disconnects to save power. The pin
+  table still says "do not leave floating".
+- R_ON_PD (100 kOhm default, populated) is the reason this package is
+  default-off without an override: it holds ON at GND while the controlling
+  MCU is in reset, unprogrammed, or driving high-Z, and it survives the
+  Smart Pull Down disconnecting. Cost is V_GPIO / 100 kOhm of extra drive
+  current while enabled (33 uA at 3.3 V, 55 uA at 5.5 V) against the 8 uA
+  typ I_Q. Set `on_pulldown_resistance` higher, or `on_pulldown=False` to
+  depopulate, only if that current matters more than the defined off state.
+
+Inrush and turn-on (§6.6, §9.2.2.1)
+- Fixed slew rate: 3.2 mV/us at 5 V, 2.7 mV/us at 3.6 V, 1.8 mV/us at
+  1.8 V; t_ON 1.95 ms / 1.75 ms / 1.5 ms respectively.
+- Inrush = C_L x SR (Eq 3): 3.2 mA into the default 1 uF at 5 V, 32 mA into
+  10 uF, 150 mA into the datasheet's 47 uF example. Size total downstream
+  bulk from the inrush the upstream rail can absorb.
+
+Output discharge (§8.3.3, Table 2)
+- `discharge="Internal"` (default): R_QOD is a 0 Ohm strap, so QOD sits on
+  VOUT and the internal 24 Ohm pull-down (R_PD,QOD) discharges the rail.
+  t_FALL = 2.2 x (R_DIS || R_L) x C_L (Eq 2) -> ~53 us for 1 uF unloaded.
+  This is the right default for a rail that must be provably dead when
+  gated off; leaving the output floating keeps residual charge on it.
+- `discharge="External"`: R_QOD is populated with `r_qod` in series, so
+  R_DIS = 24 Ohm + r_qod (Eq 1) and the fall is slowed for power-down
+  sequencing. The 1 kOhm default is the datasheet's own §9.2.2.3 example
+  point (47 uF, ~40 ms fall).
+- `discharge="Off"`: R_QOD is depopulated, QOD floats, and VOUT is left
+  floating when the switch opens.
+
+Off state
+- I_SD 2 nA typ, 800 nA max over temperature (§6.5) — a real off, not a
+  low-power mode.
+- No reverse blocking. The pass NMOS body diode is oriented OUT -> IN
+  (§8.2 block diagram), so back-driving VOUT above VIN feeds current into
+  the input rail whatever ON is doing.
+
+Integrator-owned
+- Downstream bulk/decoupling beyond the local C_OUT, and any upstream bulk
+  the rail needs to absorb the turn-on step (§10 asks for at least the
+  1 uF C_IN provided here, more if the supply is slow).
+- GPIO series/ESD parts on ON, and the ON net's own routing.
+- Placement: keep C_IN and C_OUT at the device pins with wide VIN/VOUT/GND
+  copper (§11.1). The bundled layout fragment does this.
+
+Footprint: KiCad stock `SOT-363_SC-70-6` (JEDEC MO-203 variant AB) with
+embedded STEP, the same land pattern used by the SN74LVC2G14DCKR package in
+this registry. Pads are 1.025 x 0.35 mm on a 1.675 mm span versus TI's
+DCK0006A recommendation of 0.9 x 0.4 mm on a 2.2 mm span (both reach the
+same 3.1 mm outer envelope); the KiCad pattern trades toe extension for
+heel coverage and is IPC-7351 nominal density.
+"""
+
+load("@stdlib/checks.zen", "voltage_within")
+load("@stdlib/units.zen", "Capacitance", "Resistance")
+
+Capacitor = Module("@stdlib/generics/Capacitor.zen")
+Resistor = Module("@stdlib/generics/Resistor.zen")
+
+Discharge = enum("Internal", "External", "Off")
+
+automotive = config(bool, default=False, help="Select the AEC-Q100 TPS22919QDCKRQ1 instead of the catalog part.")
+discharge = config(Discharge, default="Internal", help="Quick output discharge path (datasheet Table 2).")
+r_qod = config(Resistance, default="1kohm", help="Series QOD resistance when discharge=External.")
+c_in = config(Capacitance, default="1uF", help="Input bypass at IN (datasheet §10 minimum).")
+c_out = config(Capacitance, default="1uF", help="Local output bypass; also sets inrush (I = C x SR).")
+on_pulldown = config(bool, default=True, help="Populate the external ON pull-down that forces the off state.")
+on_pulldown_resistance = config(Resistance, default="100kohm", help="External ON pull-down value.")
+
+VIN = io(Power(voltage="1.6V to 5.5V"))
+VOUT = io(Power, help="Switched output; tracks VIN when ON is high.")
+GND = io(Ground)
+ON = io(Net, help="Active-high enable, V_IH >= 1 V regardless of VIN. Held low by R_ON_PD when undriven.")
+
+voltage_within("1.6V to 5.5V", name="vin_range")(VIN)
+
+# VOUT is a pass-through of VIN, so any declared output voltage must sit inside
+# the input's range. Silent when the parent leaves VOUT's voltage undeclared.
+if VIN.voltage:
+    voltage_within(VIN.voltage, name="vout_matches_vin")(VOUT)
+
+_QOD = Net("QOD")
+
+_CATALOG = Part(mpn="TPS22919DCKR", manufacturer="Texas Instruments")
+_CATALOG_ALT = Part(mpn="TPS22919DCKT", manufacturer="Texas Instruments")
+_AUTOMOTIVE = Part(mpn="TPS22919QDCKRQ1", manufacturer="Texas Instruments", qualifications=["AEC-Q100"])
+
+Component(
+    name="U1",
+    symbol=Symbol(
+        library="TPS22919.kicad_sym",
+        name="TPS22919QDCKRQ1" if automotive else "TPS22919DCKR",
+    ),
+    part=_AUTOMOTIVE if automotive else _CATALOG,
+    properties={"alternatives": [] if automotive else [_CATALOG_ALT]},
+    pins={
+        "IN": VIN,
+        "GND": GND,
+        "ON": ON,
+        "QOD": _QOD,
+        "OUT": VOUT,
+    },
+)
+
+# 10 V X7R in 0402 is the house 1 uF part. At 5 V bias expect roughly a third
+# to a half of nameplate capacitance; that only slows the (already 1.75 ms)
+# turn-on support and lowers inrush, so it is acceptable here. Move to 0603/
+# 16 V or higher if a rail needs guaranteed effective capacitance.
+Capacitor(name="C_IN", value=c_in, voltage="10V", package="0402", P1=VIN, P2=GND)
+Capacitor(name="C_OUT", value=c_out, voltage="10V", package="0402", P1=VOUT, P2=GND)
+
+# QOD strap: 0 ohm ties QOD to VOUT for the internal 24 ohm discharge, r_qod
+# slows the fall (R_DIS = 24 ohm + r_qod, Eq 1), depopulated leaves VOUT floating.
+Resistor(
+    name="R_QOD",
+    value=r_qod if discharge == Discharge("External") else Resistance("0ohm"),
+    package="0402",
+    P1=VOUT,
+    P2=_QOD,
+    dnp=discharge == Discharge("Off"),
+)
+
+Resistor(
+    name="R_ON_PD",
+    value=on_pulldown_resistance,
+    package="0402",
+    P1=ON,
+    P2=GND,
+    dnp=not on_pulldown,
+)
+
+Layout(name="TPS22919", path="layout/TPS22919")
+
+# pcb:sch C_IN.C x=-1451.3400 y=37.1000 rot=0
+# pcb:sch C_OUT.C x=-892.5400 y=37.1000 rot=0
+# pcb:sch GND.0 x=-1156.7000 y=240.3000 rot=0
+# pcb:sch GND.1 x=-1448.8000 y=126.0000 rot=0
+# pcb:sch GND.2 x=-890.0000 y=126.0000 rot=0
+# pcb:sch GND.3 x=-1309.1000 y=240.3000 rot=0
+# pcb:sch ON.0 x=-1362.7765 y=107.1880 rot=0
+# pcb:sch R_ON_PD.R x=-1304.0200 y=151.4000 rot=0
+# pcb:sch R_QOD.R x=-973.8200 y=37.1000 rot=0
+# pcb:sch U1 x=-1271.0000 y=-13.7000 rot=0
+# pcb:sch VIN.0 x=-1443.7200 y=-51.8000 rot=0
+# pcb:sch VOUT.0 x=-884.9200 y=-51.8000 rot=0

@@ -1,0 +1,8 @@
+(fp_lib_table
+  (version 7)
+  (lib (name "diodeinc_registry_components_2N7002") (type "KiCad") (uri "${KIPRJMOD}/../../../../2N7002") (options "") (descr ""))
+  (lib (name "diodeinc_registry_components_Texas_Instruments_BQ25185DLH") (type "KiCad") (uri "${KIPRJMOD}/../..") (options "") (descr ""))
+  (lib (name "stdlib_kicad-footprints_Capacitor_SMD") (type "KiCad") (uri "${KIPRJMOD}/../../../../../.pcb/stdlib/kicad-footprints/Capacitor_SMD.pretty") (options "") (descr ""))
+  (lib (name "stdlib_kicad-footprints_LED_SMD") (type "KiCad") (uri "${KIPRJMOD}/../../../../../.pcb/stdlib/kicad-footprints/LED_SMD.pretty") (options "") (descr ""))
+  (lib (name "stdlib_kicad-footprints_Resistor_SMD") (type "KiCad") (uri "${KIPRJMOD}/../../../../../.pcb/stdlib/kicad-footprints/Resistor_SMD.pretty") (options "") (descr ""))
+)

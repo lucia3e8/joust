@@ -1,0 +1,3 @@
+[dependencies]
+"github.com/diodeinc/registry/components/TPD4E05U06QDQARQ1" = "0.5.2"
+"github.com/diodeinc/registry/connectors/UsbC16P" = "0.2.2"

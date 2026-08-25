@@ -1,0 +1,16 @@
+JstPh = Module("../JstPh.zen")
+
+# Generate all JST PH connector variants (2-16 pins, both orientations, both mount types)
+for pin_count in JstPh.PinCount.values():
+    for orientation in JstPh.Orientation.values():
+        for mount_type in JstPh.MountType.values():
+            num_pins = int(pin_count.value)
+            name = "JstPh_" + pin_count.value + "pin_" + orientation.value + "_" + mount_type.value
+            name = name.upper()
+            pins = {"P{}".format(n): Net(f"{name}_P{n}") for n in range(1, num_pins + 1)}
+
+            # Add mounting pin for SMD variants
+            if mount_type == JstPh.MountType("SMD"):
+                pins["MP"] = Net(f"{name}_MP")
+
+            JstPh(name=name, pin_count=pin_count, orientation=orientation, mount_type=mount_type, **pins)

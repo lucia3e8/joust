@@ -1,0 +1,52 @@
+"""TagConnect TC2050-IDC-NL pad-only footprint wired as ARM Cortex 10-pin JTAG.
+
+Uses KiCad's dual-mode `Conn_ARM_JTAG_SWD_10` symbol with the Tag-Connect
+TC2050-IDC-NL 2x05 P1.27mm pad-only footprint, exposing the JTAG-mode signal
+set (TMS/TCK/TDO/TDI/TRST + nRESET + VTRef + GND). No part is populated;
+the cable mates directly to the pads.
+
+Pin map (ARM Cortex Debug 10-pin connector, JTAG mode):
+    1  VTref       7  KEY (no-connect, see note)
+    2  TMS         8  TDI
+    3  GND         9  nTRST (GNDDetect in symbol, see note)
+    4  TCK        10  nRESET
+    5  GND
+    6  TDO
+
+Notes:
+- The KiCad `Conn_ARM_JTAG_SWD_10` symbol labels dual-mode pins by their
+  SWD-mode names first (e.g. `SWDIO/TMS`); the JTAG-mode aliases are wired
+  here.
+- Pin 7 is `KEY` in the ARM Cortex Debug 10-pin spec and is hard-wired as
+  a no-connect by the KiCad symbol. RTCK is not available on this connector;
+  use a different debug header (e.g. ARM 20-pin) if RTCK is required.
+- Pin 9 in the ARM Cortex Debug 10-pin spec is `GNDDetect` (target-present
+  detect, often tied to GND on the probe). Several debuggers (e.g. SEGGER's
+  9-pin Cortex-M adapter) repurpose it as nTRST in JTAG mode; we expose it
+  as `JTAG.TRST` to match that convention. If your target needs pin 9 tied
+  to GND for probe target-detect instead, wire `JTAG.TRST` to GND.
+"""
+
+load("@stdlib/interfaces.zen", "Jtag")
+
+VTREF = io(Power(voltage="1.2V to 5.5V"))
+GND = io(Ground)
+JTAG = io(Jtag)
+NRST = io(Net)
+
+Component(
+    name="J",
+    symbol=Symbol(library="TagConnect.kicad_sym", name="Conn_ARM_JTAG_SWD_10"),
+    pins={
+        "VTref": VTREF,
+        "GND": GND,
+        "SWDIO/TMS": JTAG.TMS,
+        "SWCLK/TCK": JTAG.TCK,
+        "SWO/TDO": JTAG.TDO,
+        "NC/TDI": JTAG.TDI,
+        "GNDDetect": JTAG.TRST,
+        "~{RESET}": NRST,
+    },
+    skip_bom=True,
+    skip_pos=True,
+)

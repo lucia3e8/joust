@@ -1,0 +1,478 @@
+"""BQ25185 — 1-cell Li-ion linear battery charger with power path (WSON-10).
+
+Reference application circuit for the Texas Instruments BQ25185DLHR
+(WSON-10 / DLH, 2.2 × 2.0 mm, exposed pad) from datasheet Figure 8-1.
+The chip is a standalone, resistor-programmed linear charger with an
+integrated power path: IN (2.7 V – 5.5 V recommended) drives a regulated
+SYS rail (~4.5 V) and charges a 1S Li-ion / Li-poly / LiFePO₄ cell on
+BAT. Charge current, battery regulation voltage and input current limit
+are all strap-programmed — no I²C.
+
+## Voltage ranges
+
+- **VIN**: `voltage_within` is 2.7–5.5 V per §6.4 Recommended Operating
+  Conditions (USB-class input). The chip tolerates up to V_IN_OVP =
+  18.5 V (25 V abs max) and §6.5 lists V_IN_OP = 3.6–18 V, so wall
+  adapters above 5 V are viable — but the decoupling here is sized for
+  5 V. For higher VIN, override with `VIN=Power(voltage=...)` and
+  upsize/derate C_VIN accordingly.
+- **BAT**: 2.2–4.6 V per §6.4, but BUVLO trips at 3.0 V — below that the
+  BATFET disconnects, so the *operating* discharge floor is 3.0 V. The
+  2.2 V floor is what the pin tolerates, not a usable discharge range.
+- **SYS**: regulated only while the input is valid (§7.3.5 requires
+  V_IN > V_UVLO, V_IN > V_BAT + V_SLEEP and V_IN < V_IN_OVP). With a valid
+  input it is 4.5 V typical for V_BATREG ≤ 4.3 V; for V_BATREG > 4.3 V it
+  instead regulates in battery-tracking mode at V_BAT + 225 mV — up to
+  ~4.65 V at the 4.4 V setting, which is why the io range extends to 4.7 V
+  — and in that mode only, V_MINSYS = 3.8 V is the floor while
+  V_BAT < 3.6 V. In battery-only mode there is no SYS regulation and no
+  boost stage: SYS follows V_BAT through the BATFET (R_ON 115 mΩ typ)
+  until BUVLO opens it at 3.0 V.
+
+## Programming (datasheet §7.3.6 Table 7-1, §7.1.1.4)
+
+- `charge_current` → R_ISET = K_ISET / I_CHG, K_ISET typ = 300 A·Ω.
+  Range 10 mA – 1000 mA. Snapped to E96 (keeps margin over the 264 Ω
+  R_ISET_SHORT short-detect threshold at the 1 A endpoint). For
+  I_CHG < 50 mA, §7.1.1.4 recommends an extra 50 pF on ISET for signal
+  stability — C_ISET is populated automatically in that range (DNP
+  otherwise).
+- `fast_charge_current` (optional) → dual-rate charging (TI dual-rate
+  ISET approach; equivalent to the Seeed XIAO nRF52840 Sense HICHG
+  scheme). A second resistor R_ISET_FAST = K_ISET / (I_fast − I_base) is
+  switched in parallel with R_ISET to GND through a 2N7002 N-FET whose
+  gate is the `HICHG` io. HICHG high → R_ISET ‖ R_ISET_FAST → I_CHG rises
+  from `charge_current` to `fast_charge_current`; HICHG low/undriven →
+  base rate (a 100 kΩ gate pulldown parks it low). The FET R_DS(on)
+  (~1–7 Ω) is in series with R_ISET_FAST and negligible at kΩ scale.
+  When `fast_charge_current` is unset the FET, R_ISET_FAST and the gate
+  pulldown are DNP, so the single fixed-rate behavior is identical to
+  before. Requires `charge_current` < `fast_charge_current` ≤ 1000 mA.
+  Set `disabled_circuitry="OMIT"` to drop these three footprints from the
+  board entirely instead of DNP-placing them (see below). The `HICHG`
+  gate io is declared only when this branch exists, so an OMITted branch
+  exposes no dangling optional io.
+- `battery_regulation` + `input_current_limit` → R_VSET picked from
+  Table 7-1. Not every (V_BATREG, ILIM) pair is valid — invalid
+  combinations raise a build error. Valid pairs:
+
+      VBATREG    ILIM100   ILIM500   ILIM1100
+      4.4V       -         75 kΩ     56 kΩ
+      4.35V      -         43 kΩ     33 kΩ
+      4.2V       24 kΩ     18 kΩ     13 kΩ
+      4.1V       -         130 kΩ    100 kΩ
+      4.05V      -         9.1 kΩ    6.8 kΩ
+      3.65V      -         -         5.1 kΩ
+      3.6V       -         3.6 kΩ    2.4 kΩ
+
+## Power stage (datasheet §8.2.2.3)
+
+§8.2.2.3 requires >1 µF *after* DC-bias derating on IN, SYS and BAT, and
+recommends a 25 V rating specifically on **IN and SYS** ("which normally
+operate at 5 V") to keep the derated value above 1 µF. The table gives
+C_SYS = 1/10/100 µF (min/nom/max), C_BAT = 1/1 µF (min/nom), C_IN ≥ 1 µF.
+Note the 25 V callout does *not* extend to BAT.
+
+- C_VIN = 2.2 µF / 25 V / X7R / 0603. 25 V on IN per §8.2.2.3; 2.2 µF
+  nominal keeps the derated value comfortably above 1 µF at 5 V bias.
+  Kept at 0603: IN is the hot-plug/USB-insertion rail the datasheet
+  flags for derating, so the larger part's headroom is retained.
+- C_SYS = 10 µF / 25 V / X7R / 0805 (nominal per §8.2.2.3; ≥1 µF
+  effective required). 10 µF/25 V is not manufactured below 0805
+  (0603 tops out at 16 V), and dropping capacitance to fit 0603 would
+  forfeit the characterized 10 µF nominal, so 0805 is the floor.
+- C_BAT = 2.2 µF / 25 V / X5R / **0402** (Murata GRM155R61E225KE11D).
+  §8.2.2.3 needs only 1 µF on BAT with no 25 V callout, and BAT is the
+  least-stressed rail: it sits at the regulated cell voltage, topping
+  out at V_BATREG (≤ 4.4 V — the +225 mV tracking term is a SYS
+  behavior, not BAT), with no hot-plug inrush. That makes it the safe
+  cap to downsize for area. A 25 V-rated 0402 (same area/price as 16 V)
+  is used to minimize DC-bias derating: Murata typical data gives
+  ≈ 1.39 µF at 4.2 V and ≈ 1.35 µF at 4.4 V — above the 1 µF floor, and
+  above the 1 µF that TI itself uses for C_BAT in the datasheet
+  characterization (p. 279). This is an area-driven choice with less
+  headroom than the 0603 (which stays ~2 µF effective); worst-case
+  tolerance/temperature/aging land it near, not far above, 1 µF. Pinned
+  to an explicit MPN because the house cap catalog stops 0402 at 1 µF
+  (a 1 µF/10 V 0402 would derate below 1 µF here). C_VIN/C_SYS were
+  reviewed for the same downsize and deliberately left at 0603/0805: a
+  2.2 µF/25 V 0402 holds only ~1.2 µF at 5 V, too little margin for the
+  hot-plug/OVP input rail §8.2.2.3 specifically flags.
+
+## TS/MR (datasheet §7.3.9)
+
+Pin 6 is multiplexed: NTC thermistor input AND momentary-button manual
+reset input. With `bypass_thermistor=True`, a single 10 kΩ resistor to
+GND parks V_TS between V_HOT_ENTRY (0.115 V) and V_COLD_ENTRY
+(1.0075 V) so hot/cold faults never assert, while a momentary button
+can still pull the pin low for reset/factory mode. This is the
+datasheet-explicit recommendation in §7.3.9.1. With
+`bypass_thermistor=False`, wire an external 10 kΩ / β(25/85) = 3435 K
+NTC (e.g. 103AT-2) from the TS io to GND.
+
+## Status pins (datasheet §7.3.10, Table 7-2)
+
+STAT1/STAT2 are open-drain (20 mA max sink, 5 V max pull-up). Each pin
+gets a status LED (STAT1 red, STAT2 orange) in series with a 1.2 kΩ
+current-limit resistor to SYS: SYS → R → LED anode → STAT cathode. At the
+~4.5 V system rail the resistor limits I_LED to ~1.9 mA (V_F = 2.0 V),
+well under the LED 30 mA and STAT 20 mA limits, and the 1.2 kΩ is inside
+the datasheet 1 kΩ – 20 kΩ STAT pull-up range.
+
+This branch is sized for visual indication. It is NOT a clean ohmic
+pull-up for host GPIO readback: in the deasserted state STAT is tied to
+SYS only through the forward LED, so the logic-high level depends on LED
+I-V/leakage and the SYS rail. If a host MCU must read STAT, add a proper
+pull-up to the host's own logic rail (1 kΩ – 20 kΩ, ≤5 V) and use a
+SYS-tolerant / high-Z input — do not let the SYS-fed LED branch backfeed
+a lower-voltage GPIO rail.
+
+Set `populate_status_leds=False` to DNP D_STAT1/D_STAT2 and their
+R_STAT1/R_STAT2 series resistors (topology preserved per DNP
+conventions). Use this on area-constrained products that drive their
+own product-level charge LED from a STAT pin, or that read STAT as a
+logic signal — with the indicator branch depopulated the STAT node is a
+clean high-Z open-drain output with no SYS-fed LED loading. Defaults to
+populated for backward compatibility.
+
+## Depopulating optional circuitry (`disabled_circuitry`)
+
+The indicator-LED and dual-rate fast-charge blocks are the two optional
+features that this package DNP-places when switched off, preserving
+schematic topology per the usual convention. On severely
+area-constrained boards even a DNP footprint costs courtyard, so
+`disabled_circuitry` selects how a *disabled* block is represented:
+
+- `"DNP"` (default) — unpopulated footprints stay on the board, so the
+  feature can be stuffed later and the netlist/topology is unchanged
+  from prior versions.
+- `"OMIT"` — the disabled block's instances are not created at all, so
+  their footprints leave the board entirely (zero courtyard cost). This
+  is a deliberate departure from the DNP-only idiom, gated behind an
+  explicit opt-in, for products where the feature is permanently unused.
+
+OMIT only affects a feature that is *off*: an enabled block (LEDs with
+`populate_status_leds=True`, or fast charge with `fast_charge_current`
+set) is always populated. It does not touch C_ISET or R_TS_BYPASS, whose
+population follows `charge_current` / `bypass_thermistor`. The default
+(`"DNP"`) leaves the netlist, BOM population and layout identical to
+prior releases.
+
+## CE (datasheet §5 Pin Functions)
+
+Active-low charge enable. Must not float — tie to GND to always enable
+or drive from a host GPIO. No internal strap is added here; adding a
+pull would hide that decision from the integrator.
+
+## Out of scope
+
+- **ESD / TVS on VIN**: USB-facing ports typically need a TVS diode
+  near the connector.
+- **Battery protection**: BQ25185's BATOCP (3.125 A) and BUVLO (3.0 V)
+  are disconnect protections, not cell-level safety. Use a protected
+  cell or external protection FETs.
+- **USB BC1.2 detection**: no D+/D− detection; ILIM is static via
+  `input_current_limit`.
+
+## Layout and thermals (datasheet §8.4, §6.3)
+
+- C_VIN, C_SYS, C_BAT as close as possible to their pins.
+- Wide IN / SYS / BAT copper (1 A charge, 3.125 A discharge).
+- Solid ground plane tied to GND pin and the exposed pad (EP, pin 11);
+  stitch the EP to the plane with vias for heat sinking.
+- Linear dissipation is ~(V_IN − V_BAT) × I_CHG. At V_IN = 5 V,
+  V_BAT = 3.6 V, I_CHG = 1 A → 1.4 W; with R_θJA = 68.3 °C/W (JEDEC
+  4-layer) T_J rises ~96 °C above ambient, so expect thermal regulation
+  (T_REG = 100 °C) to throttle high charge currents on small boards.
+"""
+
+load("@stdlib/units.zen", "Current", "Resistance", "Voltage")
+load("@stdlib/utils.zen", "e96")
+
+Resistor = Module("@stdlib/generics/Resistor.zen")
+Capacitor = Module("@stdlib/generics/Capacitor.zen")
+Led = Module("@stdlib/generics/Led.zen")
+Fet = Module("github.com/diodeinc/registry/components/2N7002/2N7002.zen")
+
+DisabledCircuitry = enum("DNP", "OMIT")
+
+charge_current = config(Current, default="300mA", help="I_CHG = K_ISET / R_ISET (§7.1.1.4); 10 mA – 1000 mA.")
+fast_charge_current = config(
+    Current,
+    optional=True,
+    help="Optional dual-rate fast-charge target (XIAO HICHG-style). When set, a second ISET resistor is switched in parallel by an N-FET gated by HICHG, raising I_CHG from charge_current to this value while HICHG is high. Must be > charge_current and ≤ 1000 mA. Unset (default) = single fixed rate; the fast-charge FET/resistor/gate-pulldown are DNP so behavior is unchanged.",
+)
+_VBATREG_OPTIONS = ["3.6V", "3.65V", "4.05V", "4.1V", "4.2V", "4.35V", "4.4V"]
+
+battery_regulation = config(Voltage, default="4.2V", allowed=_VBATREG_OPTIONS)
+input_current_limit = config(Current, default="500mA", allowed=["100mA", "500mA", "1100mA"])
+bypass_thermistor = config(bool, default=True, help="10 kΩ TS/MR-to-GND bypass when no NTC is fitted (§7.3.9.1).")
+populate_status_leds = config(
+    bool,
+    default=True,
+    help="Populate the on-board STAT1/STAT2 indicator LEDs and their 1.2 kΩ series resistors. False DNPs them (topology preserved) for area-constrained products that drive their own charge LED from a STAT pin or use STAT as a clean logic signal.",
+)
+disabled_circuitry = config(
+    DisabledCircuitry,
+    default=DisabledCircuitry("DNP"),
+    help="Footprint disposition for the two optional feature blocks when they are switched off: the STAT indicator branch (when populate_status_leds=False) and the dual-rate fast-charge branch — R_ISET_FAST + Q_HICHG + R_HICHG_PD — (when fast_charge_current is unset). DNP (default) keeps the unpopulated footprints on the board so they can be stuffed later and preserves the schematic topology; OMIT drops those instances entirely (zero courtyard cost) for severely area-constrained designs. OMIT has no effect on a feature that is enabled, and does not touch C_ISET or R_TS_BYPASS (their population follows charge_current / bypass_thermistor).",
+)
+
+# Whether the dual-rate fast-charge branch (R_ISET_FAST + Q_HICHG +
+# R_HICHG_PD) physically exists: populated when fast_charge_current is
+# set, DNP-placed by default when it isn't, and dropped entirely only
+# when it is unused *and* disabled_circuitry=OMIT. Computed before the io
+# block so the HICHG gate io is declared iff this branch exists — an
+# OMITted branch then leaves no dangling optional io (no "HICHG not
+# connected to any ports" warning for consumers).
+_fast_charge = fast_charge_current != None
+_omit = disabled_circuitry == DisabledCircuitry("OMIT")
+_fast_block = _fast_charge or not _omit
+
+VIN = io(Power(voltage="2.7V to 5.5V"), help="Adapter / USB input (datasheet IN); 25 V abs-max tolerant.")
+SYS = io(Power(voltage="3.0V to 4.7V"), help="~4.5 V in adapter mode; V_BAT + 225 mV tracking when V_BATREG > 4.3 V.")
+BAT = io(Power(voltage="2.2V to 4.6V"), help="1S Li-ion / Li-poly / LiFePO₄ cell; internal BATFET to SYS.")
+GND = io(Ground)
+
+CE = io(Net, help="Active-low charge enable. Must NOT float — tie to GND to always enable or drive from host GPIO.")
+
+# HICHG only exists when the fast-charge branch does (see _fast_block). It
+# gates the 2N7002 rather than any BQ25185 pin, so when the branch is
+# OMITted there is nothing for it to bind to; declaring it conditionally
+# avoids exposing a dangling optional io.
+if _fast_block:
+    HICHG = io(
+        Net,
+        optional=True,
+        help="Active-high fast-charge enable (XIAO HICHG). Gates the parallel ISET resistor; only meaningful when fast_charge_current is set. Drive at ≥ 3 V (2N7002 V_GS(th) up to 2.5 V) — 1.8 V is not guaranteed. Undriven = base rate (held low by gate pulldown).",
+    )
+
+STAT1 = io(Net, optional=True, help="Open-drain charge status 1 (Table 7-2). May be left unconnected.")
+STAT2 = io(Net, optional=True, help="Open-drain charge status 2 (Table 7-2). May be left unconnected.")
+TS = io(Net, optional=True, help="NTC / manual-reset pin. With an external 10 kΩ NTC, set bypass_thermistor=False.")
+
+# R_ILIM/VSET from datasheet Table 7-1 (§7.3.6). Only listed pairs are valid.
+_R_VSET_TABLE = {
+    (Voltage("4.4V"), Current("500mA")): Resistance("75kohm"),
+    (Voltage("4.4V"), Current("1100mA")): Resistance("56kohm"),
+    (Voltage("4.35V"), Current("500mA")): Resistance("43kohm"),
+    (Voltage("4.35V"), Current("1100mA")): Resistance("33kohm"),
+    (Voltage("4.2V"), Current("100mA")): Resistance("24kohm"),
+    (Voltage("4.2V"), Current("500mA")): Resistance("18kohm"),
+    (Voltage("4.2V"), Current("1100mA")): Resistance("13kohm"),
+    (Voltage("4.1V"), Current("500mA")): Resistance("130kohm"),
+    (Voltage("4.1V"), Current("1100mA")): Resistance("100kohm"),
+    (Voltage("4.05V"), Current("500mA")): Resistance("9.1kohm"),
+    (Voltage("4.05V"), Current("1100mA")): Resistance("6.8kohm"),
+    (Voltage("3.65V"), Current("1100mA")): Resistance("5.1kohm"),
+    (Voltage("3.6V"), Current("500mA")): Resistance("3.6kohm"),
+    (Voltage("3.6V"), Current("1100mA")): Resistance("2.4kohm"),
+}
+
+
+def _r_vset(vbatreg, ilim):
+    """Lookup R_ILIM/VSET from datasheet Table 7-1. Fails on invalid pair."""
+    key = (vbatreg, ilim)
+    check(
+        key in _R_VSET_TABLE,
+        "Invalid (battery_regulation, input_current_limit) = ({}, {}) — not listed in BQ25185 Table 7-1. 100 mA ILIM is only available with V_BATREG = 4.2 V.".format(
+            vbatreg, ilim
+        ),
+    )
+    return _R_VSET_TABLE[key]
+
+
+def _r_iset(ichg):
+    """R_ISET = K_ISET / I_CHG (§7.1.1.4), K_ISET typ = 300 A·Ω.
+
+    E96 (not E24) keeps the 1 A endpoint at 301 Ω, preserving margin
+    over the R_ISET_SHORT = 264 Ω short-detect threshold (§6.5).
+    """
+    check(
+        ichg >= Current("10mA") and ichg <= Current("1000mA"),
+        "charge_current must be 10 mA – 1000 mA (§7.1.1.4), got " + str(ichg),
+    )
+    return e96(Resistance("300ohm") * Current("1A") / ichg)
+
+
+def _r_iset_fast(i_base, i_fast):
+    """Second (parallel) ISET resistor for dual-rate charging.
+
+    With R_base = K_ISET / I_base and the fast resistor switched in
+    parallel, R_base ‖ R_fast = K_ISET / I_fast. Solving:
+
+        R_fast = K_ISET / (I_fast − I_base)
+
+    The switching N-FET R_DS(on) (~1–7 Ω for a 2N7002) is in series
+    with R_fast; at these kΩ-scale values it contributes < 0.1 % to
+    I_CHG_fast, well inside the ISET programming tolerance.
+    """
+    return e96(Resistance("300ohm") * Current("1A") / (i_fast - i_base))
+
+
+if fast_charge_current != None:
+    check(
+        fast_charge_current > charge_current,
+        "fast_charge_current ({}) must be greater than charge_current ({}) — the parallel ISET resistor only raises I_CHG.".format(
+            fast_charge_current, charge_current
+        ),
+    )
+    check(
+        fast_charge_current <= Current("1000mA"),
+        "fast_charge_current must be ≤ 1000 mA (§7.1.1.4), got " + str(fast_charge_current),
+    )
+
+# Placeholder keeps R_ISET_FAST value valid (positive divisor) while DNP.
+_i_fast = fast_charge_current if _fast_charge else charge_current * 2
+
+_TS = TS if TS else Net("TS_MR")
+_ISET = Net("ISET")
+_ISET_FAST = Net("ISET_FAST")
+_VSET = Net("ILIM_VSET")
+_STAT1 = STAT1 if STAT1 else Net("STAT1")
+_STAT2 = STAT2 if STAT2 else Net("STAT2")
+
+Component(
+    name="U1",
+    symbol=Symbol(library="BQ25185DLH.kicad_sym"),
+    pins={
+        "IN": VIN,
+        "SYS": SYS,
+        "BAT": BAT,
+        "GND": GND,
+        "EP": GND,
+        "~{CE}": CE,
+        "STAT1": _STAT1,
+        "STAT2": _STAT2,
+        "TS/MR": _TS,
+        "ISET": _ISET,
+        "ILIM/VSET": _VSET,
+    },
+)
+
+# Input / output decoupling (datasheet §8.2.2.3): ≥1 µF effective after
+# DC-bias derating, 25 V rated on IN and SYS.
+Capacitor(name="C_VIN", value="2.2uF", voltage="25V", package="0603", P1=VIN, P2=GND)
+Capacitor(name="C_SYS", value="10uF", voltage="25V", package="0805", P1=SYS, P2=GND)
+# C_BAT downsized to 0402 for area (BAT is the least-stressed rail: a
+# stable battery node with no hot-plug inrush, unlike the IN/SYS rails the
+# datasheet flags for derating). §8.2.2.3 requires only 1 µF on BAT with no
+# 25 V callout, but a 25 V-rated 0402 is chosen anyway (same area/price as
+# 16 V) to minimize DC-bias derating: a 2.2 µF/25 V X5R 0402 holds well
+# above 1 µF at the ≤4.65 V BAT node. Explicit MPN: the registry house cap
+# catalog stops 0402 at 1 µF (a 1 µF/10 V 0402 would derate below the 1 µF
+# floor here), so a specific sourceable part is pinned instead.
+Capacitor(
+    name="C_BAT",
+    value="2.2uF",
+    voltage="25V",
+    dielectric="X5R",
+    package="0402",
+    mpn="GRM155R61E225KE11D",
+    manufacturer="Murata Electronics",
+    P1=BAT,
+    P2=GND,
+)
+
+# Strap/programming resistors run at 0201 (house Panasonic ERJ-1GNF,
+# 25 V / 0.05 W / 1 % E96). ICHG accuracy is set by R_ISET's 1 % tolerance
+# ⊕ the IC's K_ISET spec and is unchanged by package; ISET dissipation is
+# ~1–3 mW (V_ISET ≈ 1 V) and node voltages are ≤5 V, well inside the 0201
+# 0.05 W / 25 V ratings.
+Resistor(name="R_ISET", value=_r_iset(charge_current).with_tolerance("1%"), package="0201", P1=_ISET, P2=GND)
+
+# §7.1.1.4: for I_CHG < 50 mA an extra ~50 pF on ISET is recommended for
+# signal stability (47 pF = nearest E24); DNP at higher charge currents.
+# Kept at 0402: the house cap catalog has no 0201 C0G part (0201 tops out
+# at 2.2 nF X7R), and a C0G 47 pF is only house-matchable at 0402.
+Capacitor(
+    name="C_ISET", value="47pF", voltage="25V", package="0402", P1=_ISET, P2=GND, dnp=charge_current >= Current("50mA")
+)
+
+# Dual-rate ISET (TI dual-rate approach; XIAO HICHG-style): a second
+# ISET resistor is switched to GND through an N-FET. HICHG high adds
+# R_ISET_FAST ‖ R_ISET, raising I_CHG from charge_current to
+# fast_charge_current. The gate pulldown holds the base rate when HICHG
+# is undriven. All three parts are DNP unless fast_charge_current is set,
+# so the default single-rate behavior is unchanged; disabled_circuitry=
+# OMIT drops the footprints instead of DNP-placing them.
+if _fast_block:
+    _HICHG = HICHG if HICHG else Net("HICHG")
+    Resistor(
+        name="R_ISET_FAST",
+        value=_r_iset_fast(charge_current, _i_fast).with_tolerance("1%"),
+        package="0201",
+        P1=_ISET,
+        P2=_ISET_FAST,
+        dnp=not _fast_charge,
+    )
+    Fet(name="Q_HICHG", DRAIN=_ISET_FAST, GATE=_HICHG, SOURCE=GND, dnp=not _fast_charge)
+    Resistor(name="R_HICHG_PD", value="100kohm", package="0201", P1=_HICHG, P2=GND, dnp=not _fast_charge)
+
+Resistor(
+    name="R_VSET",
+    value=_r_vset(battery_regulation, input_current_limit).with_tolerance("1%"),
+    package="0201",
+    P1=_VSET,
+    P2=GND,
+)
+
+# TS/MR thermistor bypass (§7.3.9.1): 10 kΩ to GND parks V_TS between the
+# hot/cold trip windows; a pushbutton to GND still works for manual reset.
+Resistor(name="R_TS_BYPASS", value="10kohm", package="0201", P1=_TS, P2=GND, dnp=not bypass_thermistor)
+
+# Status LEDs (STAT1 red, STAT2 orange) with their series/current-limit
+# resistors for visual indication: SYS → R → LED anode → STAT cathode.
+# Sizing (both Vishay VLM*1500: V_F = 2.0 V typ at I_F): with SYS at the
+# ~4.5 V system-regulation point and a STAT V_OL of ~0.2 V when sinking,
+#   I_LED = (4.5 - 2.0 - 0.2) / 1.2 kΩ ≈ 1.9 mA.
+# 1.2 kΩ keeps I_LED well under both the LED 30 mA and STAT 20 mA limits
+# even at the SYS 4.65 V battery-tracking max (~2.0 mA), and lands inside
+# the 1 kΩ - 20 kΩ STAT pull-up window. NOTE: indication path, not a clean
+# GPIO pull-up — host readback should add its own pull-up to the host
+# logic rail (see the docstring Status pins section).
+# populate_status_leds=False DNPs the indicator branch (topology kept)
+# so products that drive their own charge LED from STAT don't carry 4
+# redundant 0402s, and STAT is left as a clean high-Z open-drain node.
+# disabled_circuitry=OMIT drops the four footprints instead of DNP-placing.
+if populate_status_leds or not _omit:
+    _STAT1_A = Net("STAT1_LED_A")
+    _STAT2_A = Net("STAT2_LED_A")
+    Resistor(name="R_STAT1", value="1.2kohm", package="0201", P1=SYS, P2=_STAT1_A, dnp=not populate_status_leds)
+    Resistor(name="R_STAT2", value="1.2kohm", package="0201", P1=SYS, P2=_STAT2_A, dnp=not populate_status_leds)
+    Led(name="D_STAT1", color="red", package="0402", A=_STAT1_A, K=_STAT1, dnp=not populate_status_leds)
+    Led(name="D_STAT2", color="orange", package="0402", A=_STAT2_A, K=_STAT2, dnp=not populate_status_leds)
+
+Layout(name="BQ25185DLH", path="layout/BQ25185DLH")
+
+# pcb:sch BAT.0 x=435.8800 y=-102.6000 rot=0
+# pcb:sch CE.0 x=-269.1575 y=-19.8120 rot=0
+# pcb:sch C_BAT.C x=428.2600 y=-1.0000 rot=0
+# pcb:sch C_ISET.C x=-397.2400 y=75.2000 rot=0
+# pcb:sch C_SYS.C x=110.7600 y=-153.4000 rot=0
+# pcb:sch C_VIN.C x=-295.6400 y=-153.4000 rot=0
+# pcb:sch D_STAT1.LED x=291.1000 y=-107.6800 rot=-90
+# pcb:sch D_STAT2.LED x=189.5000 y=-82.2800 rot=-90
+# pcb:sch GND.0 x=-89.9000 y=176.8000 rot=0
+# pcb:sch GND.1 x=-293.1000 y=-77.2000 rot=0
+# pcb:sch GND.2 x=-255.0000 y=176.8000 rot=0
+# pcb:sch GND.3 x=113.3000 y=-77.2000 rot=0
+# pcb:sch GND.4 x=430.8000 y=100.6000 rot=0
+# pcb:sch GND.5 x=49.8000 y=176.8000 rot=0
+# pcb:sch GND.6 x=-559.8000 y=303.8000 rot=0
+# pcb:sch HICHG.0 x=-784.6241 y=170.6880 rot=0
+# pcb:sch Q_HICHG.2N7002 x=-623.3000 y=126.0000 rot=0
+# pcb:sch R_HICHG_PD.R x=-694.4200 y=202.2000 rot=0
+# pcb:sch R_ISET.R x=-326.1200 y=75.2000 rot=0
+# pcb:sch R_ISET_FAST.R x=-554.7200 y=49.8000 rot=0
+# pcb:sch R_STAT1.R x=308.8800 y=-191.5000 rot=0
+# pcb:sch R_STAT2.R x=207.2800 y=-178.8000 rot=0
+# pcb:sch R_TS_BYPASS.R x=52.3400 y=87.9000 rot=0
+# pcb:sch R_VSET.R x=-249.9200 y=75.2000 rot=0
+# pcb:sch STAT1.0 x=260.4044 y=5.5880 rot=-180
+# pcb:sch STAT2.0 x=260.4044 y=30.9880 rot=-180
+# pcb:sch SYS.0 x=54.8800 y=-204.2000 rot=0
+# pcb:sch SYS.1 x=258.0800 y=-267.7000 rot=0
+# pcb:sch TS.0 x=77.1616 y=56.3880 rot=-180
+# pcb:sch U1 x=-204.2000 y=-115.3000 rot=0
+# pcb:sch VIN.0 x=-224.5200 y=-204.2000 rot=0

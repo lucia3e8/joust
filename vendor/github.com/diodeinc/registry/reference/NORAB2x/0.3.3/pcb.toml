@@ -1,0 +1,2 @@
+[dependencies]
+"github.com/diodeinc/registry/components/u-blox/NORA-B206-00B" = "0.3.1"

@@ -1,0 +1,13 @@
+"""
+1N4148W-7-F
+
+Auto-generated using `pcb search`.
+"""
+
+Pins = struct(A=io("A", Net), C=io("C", Net))
+
+Component(
+    name="1N4148W-7-F",
+    symbol=Symbol(library="1N4148W-7-F.kicad_sym"),
+    pins={"A": Pins.A, "C": Pins.C},
+)

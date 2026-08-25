@@ -1,0 +1,27 @@
+"""TPD4E05U06QDQARQ1 Component"""
+
+Pins = struct(
+    D1M=io("D1M", Net),
+    D1P=io("D1P", Net),
+    D2M=io("D2M", Net),
+    D2P=io("D2P", Net),
+    GND=io("GND", Net),
+)
+
+Component(
+    name="TPD4E05U06QDQARQ1",
+    symbol=Symbol(library="TPD4E05U06QDQARQ1.kicad_sym"),
+    # I/O channels are identical/independent; symbol pins are name-less so
+    # they map by pad number. 1/10 and 2/9 and 4/7 and 5/6 are straight-through pad pairs.
+    pins={
+        "1": Pins.D1P,
+        "10": Pins.D1P,
+        "2": Pins.D1M,
+        "9": Pins.D1M,
+        "4": Pins.D2P,
+        "7": Pins.D2P,
+        "5": Pins.D2M,
+        "6": Pins.D2M,
+        "GND": Pins.GND,
+    },
+)

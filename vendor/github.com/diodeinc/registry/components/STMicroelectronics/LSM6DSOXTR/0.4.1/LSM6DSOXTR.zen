@@ -1,0 +1,41 @@
+"""
+LSM6DSOXTR
+
+Auto-generated using `pcb search`.
+"""
+
+Pins = struct(
+    CS=io("CS", Net),
+    GND=io("GND", Net),
+    INT1=io("INT1", Net),
+    INT2=io("INT2", Net),
+    OCS_AUX=io("OCS_AUX", Net),
+    SCL=io("SCL", Net),
+    SCX=io("SCX", Net),
+    SDA=io("SDA", Net),
+    SDO_AUX=io("SDO_AUX", Net),
+    SDO_SA0=io("SDO_SA0", Net),
+    SDX=io("SDX", Net),
+    VDD=io("VDD", Power),
+    VDDIO=io("VDDIO", Power),
+)
+
+Component(
+    name="LSM6DSOXTR",
+    symbol=Symbol(library="LSM6DSOXTR.kicad_sym"),
+    pins={
+        "CS": Pins.CS,
+        "GND": Pins.GND,
+        "INT1": Pins.INT1,
+        "INT2": Pins.INT2,
+        "OCS_AUX": Pins.OCS_AUX,
+        "SCL": Pins.SCL,
+        "SCX": Pins.SCX,
+        "SDA": Pins.SDA,
+        "SDO_AUX": Pins.SDO_AUX,
+        "SDO/SA0": Pins.SDO_SA0,
+        "SDX": Pins.SDX,
+        "VDD": Pins.VDD,
+        "VDDIO": Pins.VDDIO,
+    },
+)

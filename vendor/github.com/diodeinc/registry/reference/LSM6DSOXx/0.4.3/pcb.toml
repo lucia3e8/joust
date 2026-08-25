@@ -1,0 +1,2 @@
+[dependencies]
+"github.com/diodeinc/registry/components/STMicroelectronics/LSM6DSOXTR" = "0.4.1"

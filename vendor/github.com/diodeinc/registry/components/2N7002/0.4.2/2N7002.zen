@@ -1,0 +1,121 @@
+"""2N7002 / 2N7002K — commodity logic-level N-channel MOSFETs in SOT-23.
+
+JEDEC-type 60 V small-signal switching FET, multi-sourced by onsemi, Diodes
+Incorporated, Vishay and Nexperia in the same SOT-23 (TO-236AB) outline with
+the industry-standard pin map (1 = gate, 2 = source, 3 = drain). Intended for
+low-side switching of small loads driven straight from 1.8-5 V logic.
+
+`variant` selects the silicon tier. Every in-stock second source of the
+selected tier is emitted: the widest-stocked MPN is the primary part and the
+rest are BOM alternates that meet or beat the tier bounds below, so those
+bounds are what a design may rely on regardless of what gets stuffed.
+
+ Variant  | V_DS | I_D (T_A = 25 °C)  | R_DS(on) max      | V_GS(th)   | Gate ESD clamp
+ 2N7002K  | 60 V | >= 300 mA          | 4 Ω @ V_GS 4.5 V  | 1.0-2.5 V  | yes, 2 kV HBM
+ 2N7002   | 60 V | >= 170 mA          | 7.5 Ω @ V_GS 5 V  | 1.0-2.5 V  | no
+
+The tier R_DS(on) bound is taken at the lowest gate voltage every second
+source of that tier specifies. Diodes' bins are specified at 5 V rather than
+4.5 V (3 Ω for 2N7002K, 7.5 Ω for 2N7002), which sets the 2N7002 tier bound;
+the 4 Ω / 4.5 V bound of the 2N7002K tier comes from Vishay.
+
+Per-source data behind those envelopes; the first MPN of each tier is the
+primary part and the others are its alternates:
+
+ MPN                | Manufacturer | R_DS(on) max                     | I_D             | V_GS(th) max | V_GS max
+ 2N7002KT1G         | onsemi       | 1.6 Ω @ 10 V, 2.5 Ω @ 4.5 V      | 320 mA min pad  | 2.3 V        | ±20 V
+ 2N7002K-7          | Diodes Inc   | 2 Ω @ 10 V, 3 Ω @ 5 V            | 380 mA 1 in² Cu | 2.5 V        | ±20 V
+ 2N7002K-T1-GE3     | Vishay       | 2 Ω @ 10 V, 4 Ω @ 4.5 V          | 300 mA          | 2.5 V        | ±20 V
+ 2N7002-7-F         | Diodes Inc   | 5 Ω @ 10 V, 7.5 Ω @ 5 V          | 170 mA min pad  | 2.5 V        | ±20 V
+ 2N7002,215         | Nexperia     | 5 Ω @ 10 V, 5.3 Ω @ 4.5 V        | 300 mA @ T_sp   | 2.5 V        | ±30 V
+
+Gate drive from 3.3 V logic
+- Both tiers are logic-level: V_GS(th) is 2.5 V max and R_DS(on) is specified
+  at 4.5 V or 5 V, so a 3.3 V CMOS output fully enhances the channel. No tier
+  in this package relies on a 10 V-only R_DS(on) spec.
+- No datasheet in the family guarantees R_DS(on) below 4.5 V. Use the typical
+  curves for 3.3 V drive and the 4.5 V max as the design bound: onsemi Figure 5
+  gives ~1.7 Ω typical at V_GS = 3.3 V, I_D = 200 mA versus 1.33 Ω typical at
+  4.5 V, i.e. about 1.3x. Scaling the tier envelope the same way puts the
+  2N7002K worst case near 5 Ω at 3.3 V and 25 °C; multiply by ~1.4 at
+  T_j = 85 °C (onsemi Figure 6).
+- Worked example at 120 mA: 0.3 V and 36 mW for the onsemi 2.5 Ω @ 4.5 V bound,
+  0.48 V and 58 mW at the 4 Ω tier envelope, ~0.6 V if the 3.3 V derating above
+  is applied. The 2N7002 tier is 0.9 V at its 7.5 Ω bound, which is why
+  2N7002K is the default.
+- Gate charge is 0.7 nC at 4.5 V (onsemi) and C_iss is 45 pF max, so a 25 kHz
+  PWM output sources ~18 µA average and any MCU pin drives it directly. A
+  series gate resistor of 47-220 Ω is still worth adding to damp the gate loop
+  and slow edges (100 Ω with 45 pF is a ~4.5 ns time constant, negligible next
+  to a 40 µs period), plus a 10-100 kΩ gate pulldown so the FET stays off while
+  the driving pin is high-impedance during reset or boot. Neither part is
+  included here; this package is the primitive only.
+
+Limits and thermals
+- Low-side switching only. Source and drain are not interchangeable: the
+  intrinsic source-drain body diode conducts whenever V_S > V_D.
+- onsemi 2N7002K power dissipation is 300 mW on a minimum land
+  (R_thJA 417 °C/W) and 420 mW on a 1 in² pad (R_thJA 300 °C/W). The I_D
+  numbers above are steady-state ratings on the manufacturers' reference
+  coupons, so copper area sets the real limit well before the 60 V / 5 A pulsed
+  ratings do.
+- The 2N7002K tier adds gate-source ESD clamp diodes (onsemi simplified
+  schematic, Diodes "ESD protected up to 2 kV"), which is why its gate leakage
+  is specified in µA at ±20 V rather than nA. Keep |V_GS| inside ±20 V.
+
+Sourcing notes
+- Nexperia's 2N7002K is deliberately not listed as a 2N7002K alternate: it is
+  the weakest bin of that tier (5.3 Ω max at 4.5 V, V_GS limited to ±15 V by
+  its clamp) and shows no distributor stock, so accepting it as a drop-in would
+  break the tier envelope above.
+- 2N7002W (SC-70) and 2N7002DW (dual, SOT-363) share the die but not the
+  footprint; they need their own packages.
+
+Footprint: SOT95P260X110-3N, an IPC-7351 nominal-density SOT-23 land. Pads are
+1.05 mm along the lead by 0.6 mm across it, on a 1.9 mm row pitch with a 2.4 mm
+pad-centre span; pads 1/2 face pad 3. The embedded STEP model measures
+2.9 x 1.3 mm body, 2.6 mm lead span, 1.1 mm height and aligns with the land
+without an extra transform. This is the land the package has always shipped,
+kept unchanged so existing consumer layouts stay valid.
+"""
+
+Variant = enum("2N7002K", "2N7002")
+
+variant = config(
+    Variant,
+    default=Variant("2N7002K"),
+    help="Silicon tier. 2N7002K is the low-R_DS(on), ESD-clamped tier; 2N7002 is the original weaker bin.",
+)
+
+GATE = io(Net)
+DRAIN = io(Net)
+SOURCE = io(Net)
+
+# Index 0 is the primary part (widest distributor stock in the tier, and the
+# MPN the tier's symbol describes); the rest are second sources that meet or
+# beat the tier envelope in the docstring, so a sourcing system may swap freely.
+_PARTS = {
+    Variant("2N7002K"): [
+        Part(mpn="2N7002KT1G", manufacturer="onsemi"),
+        Part(mpn="2N7002K-7", manufacturer="Diodes Incorporated"),
+        Part(mpn="2N7002K-T1-GE3", manufacturer="Vishay"),
+    ],
+    Variant("2N7002"): [
+        Part(mpn="2N7002-7-F", manufacturer="Diodes Incorporated"),
+        Part(mpn="2N7002,215", manufacturer="Nexperia"),
+    ],
+}
+
+_parts = _PARTS[variant]
+
+Component(
+    name="2N7002",
+    symbol=Symbol(library="2N7002.kicad_sym", name=variant.value),
+    part=_parts[0],
+    properties={"alternatives": _parts[1:]},
+    pins={
+        "GATE": GATE,
+        "DRAIN": DRAIN,
+        "SOURCE": SOURCE,
+    },
+)

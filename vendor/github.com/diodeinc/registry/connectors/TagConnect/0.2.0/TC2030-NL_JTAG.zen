@@ -1,0 +1,43 @@
+"""TagConnect TC2030-IDC-NL 6-pad land pattern wired as 4-wire JTAG.
+
+The 6-pad Tag-Connect TC2030 carries a target-voltage reference, a ground
+reference, and four signal pads. That fits a complete 4-wire JTAG bus
+(TMS, TCK, TDI, TDO) but leaves no room for nRESET — the target board
+must reset the device through another path (e.g. an EN/nRST button) and
+the probe drives only the JTAG state machine.
+
+Pad layout (matches the Tag-Connect TC2030 numbering used by KiCad's
+`Tag-Connect_TC2030-IDC-NL_2x03_P1.27mm_Vertical` footprint, which is the
+same physical pad map as the ARM SWD variant — only the signal assignment
+to pads 2/3/4/6 is repurposed for JTAG):
+
+    1  VTref      (target-voltage reference)
+    2  TMS
+    3  TCK
+    4  TDI
+    5  GND
+    6  TDO
+
+No part is populated; the TC2030-IDC-NL cable mates directly to the pads.
+"""
+
+load("@stdlib/interfaces.zen", "Jtag")
+
+VTREF = io(Power(voltage="1.2V to 5.5V"))
+GND = io(Ground)
+JTAG = io(Jtag)
+
+Component(
+    name="J",
+    symbol=Symbol(library="TagConnect.kicad_sym", name="TC2030"),
+    pins={
+        "1": VTREF,
+        "2": JTAG.TMS,
+        "3": JTAG.TCK,
+        "4": JTAG.TDI,
+        "5": GND,
+        "6": JTAG.TDO,
+    },
+    skip_bom=True,
+    skip_pos=True,
+)

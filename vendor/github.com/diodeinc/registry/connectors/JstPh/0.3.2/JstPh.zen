@@ -1,0 +1,144 @@
+"""JST PH Series Connector - 2.0mm Pitch Wire-to-Board
+
+The JST PH series is a versatile 2.0mm pitch wire-to-board connector offering a
+balance between compactness and ease of handling. It features a detent lock mechanism
+and is one of the most widely used JST connector families, commonly found in battery
+packs, hobby electronics, and consumer devices.
+
+Specifications:
+- Pitch: 2.0mm
+- Current Rating: 2A per contact
+- Voltage Rating: 100V
+- Operating Temperature: -25°C to +85°C
+- Contact Material: Brass
+- Contact Finish: Tin
+- Insulation Material: Polyamide (PA66)
+
+Series Variants (Board-side Headers):
+- B__B-PH-K-S: Top-entry vertical through-hole header
+- S__B-PH-K: Side-entry horizontal through-hole header
+- B__B-PH-SM4-TB: Top-entry vertical SMD header
+- S__B-PH-SM4-TB: Side-entry horizontal SMD header
+
+Pin Configurations: 2 to 15 positions
+
+The PH series is commonly used in:
+- Lithium battery pack connections (2-pin for single cell, 3-pin with balance)
+- RC hobby and drone battery connectors
+- Arduino and microcontroller projects
+- Consumer electronics internal wiring
+- LED strip and lighting connections
+
+Mating Connector: PHR series housing with SPH crimp contacts
+
+3D Models:
+The through-hole (-K) footprints embed KiCad's official STEP models. The SMD
+(-SM4-TB) footprints embed JST/SamacSys STEP models (sourced via component
+search) that were rigidly re-aligned to each KiCad-generated footprint origin
+by matching pin-1/pin-N pad correspondence, then embedded with kicad-embed://
+zero-offset (verified by 3D render). Most SM4-TB variants use detailed vendor
+models. B6B uses a datasheet-derived parametric model (molded housing with the
+top mating cavity, six contact blades, No.1-circuit chamfer, and end mounting
+fittings) built to the ePH SM4-TB dimensions and aligned to the footprint origin
+(verified by 3D render). S7B/S11B still use lower-detail but dimensionally-correct
+block models. The following SM4-TB variants still lack a 3D model because a trusted
+STEP could not be retrieved from automated sources (SamacSys backend errors;
+JST moved to email-only CAD delivery; SnapEDA/3DContentCentral are login-gated):
+B2B, B5B, B10B, B14B (vertical) and S10B, S13B, S15B (horizontal).
+"""
+
+PinCount = enum("2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15")
+Orientation = enum("Vertical", "Horizontal")
+MountType = enum("THT", "SMD")
+
+
+pin_count = config(PinCount, default=PinCount("2"))
+orientation = config(Orientation, default=Orientation("Vertical"))
+mount_type = config(MountType, default=MountType("SMD"))
+mpn = config(str, optional=True)
+manufacturer = config(str, optional=True)
+
+
+def _get_pin_count(pin_count: PinCount) -> int:
+    return int(pin_count.value)
+
+
+pins = {}
+for pin in range(1, _get_pin_count(pin_count) + 1):
+    pins["Pin_{}".format(pin)] = io("P{}".format(pin), Net)
+
+# Add mounting pin for SMD variants
+if mount_type == MountType("SMD"):
+    pins["MountPin"] = io("MP", Net)
+
+
+def _symbol(num_pins: int, orientation: Orientation, mount_type: MountType):
+    """Local per-variant symbol (footprint is set on the symbol)."""
+    return Symbol(library="JstPh.kicad_sym", name=_mpn(num_pins, orientation, mount_type))
+
+
+def _mpn(num_pins: int, orientation: Orientation, mount_type: MountType) -> str:
+    """Generate the MPN based on pin count, orientation, and mount type."""
+    pin_str = str(num_pins)
+
+    if orientation == Orientation("Vertical"):
+        prefix = "B"
+    else:
+        prefix = "S"
+
+    if mount_type == MountType("SMD"):
+        return prefix + pin_str + "B-PH-SM4-TB"
+    else:
+        return prefix + pin_str + "B-PH-K-S"
+
+
+def _alternative_mpn(num_pins: int, orientation: Orientation, mount_type: MountType) -> list:
+    """Generate alternative MPNs for JST with suffix and Chinese clones.
+
+    JST parts on LCSC/JLCPCB use full MPN with (LF)(SN) suffix.
+    Chinese clones:
+    - THT: PH-{N}A (vertical), PH-{N}AW (horizontal) from BOOMELE
+    - SMD: PH-{N}AB (vertical), PH-{N}AWB (horizontal) from DLL
+    """
+    pin_str = str(num_pins)
+
+    if mount_type == MountType("SMD"):
+        if orientation == Orientation("Vertical"):
+            jst_mpn = "B" + pin_str + "B-PH-SM4-TB(LF)(SN)"
+            alt_mpn = "PH-" + pin_str + "AB"
+        else:
+            jst_mpn = "S" + pin_str + "B-PH-SM4-TB(LF)(SN)"
+            alt_mpn = "PH-" + pin_str + "AWB"
+
+        return [
+            {"mpn": jst_mpn, "manufacturer": "JST"},
+            {"mpn": alt_mpn, "manufacturer": "DLL"},
+        ]
+    else:
+        if orientation == Orientation("Vertical"):
+            jst_mpn = "B" + pin_str + "B-PH-K-S(LF)(SN)"
+            alt_mpn = "PH-" + pin_str + "A"
+        else:
+            jst_mpn = "S" + pin_str + "B-PH-K-S(LF)(SN)"
+            alt_mpn = "PH-" + pin_str + "AW"
+
+        return [
+            {"mpn": jst_mpn, "manufacturer": "JST"},
+            {"mpn": alt_mpn, "manufacturer": "BOOMELE(Boom Precision Elec)"},
+        ]
+
+
+_num_pins = _get_pin_count(pin_count)
+
+Component(
+    name="JPH",
+    part=Part(mpn=mpn or _mpn(_num_pins, orientation, mount_type), manufacturer=manufacturer or "JST"),
+    type="jst_ph",
+    symbol=_symbol(_num_pins, orientation, mount_type),
+    prefix="J",
+    pins=pins,
+    properties={
+        "value": _mpn(_num_pins, orientation, mount_type),
+        "alternatives": _alternative_mpn(_num_pins, orientation, mount_type),
+    },
+)

@@ -1,0 +1,62 @@
+"""RT9013-33GB - RICHTEK 500 mA fixed 3.3 V LDO (SOT-23-5) reference design.
+
+High-PSRR, low-noise CMOS LDO with a fixed 3.3 V output. Stable with
+low-ESR ceramic capacitors and needs no output bypass capacitor
+(Richtek RT9013 datasheet, DS9013-10).
+
+Operating envelope (datasheet "Recommended Operating Conditions"):
+- VIN: 2.2 V to 5.5 V
+- VOUT: 3.3 V fixed, up to 500 mA
+- Dropout 250 mV typ at 500 mA; quiescent 25 uA typ, 0.7 uA in shutdown
+
+Support circuitry (datasheet "Application Information"):
+- C_in: >= 1 uF X7R ceramic at VIN, placed < 0.5 in from the VIN pin.
+- C_out: >= 1 uF ceramic (ESR > 5 mOhm) at VOUT, placed < 0.5 in from the
+  VOUT pin; sets loop stability.
+
+EN is active-high CMOS and must NOT be left floating (datasheet "Enable").
+A strap resistor biases EN so it is never floating: `en_strap` selects a
+pull-up to VIN (default, always-on) or a pull-down to GND (default-off);
+the unused strap is left unpopulated. EN is also exposed so the integrator
+can drive it from a logic output.
+"""
+
+Capacitor = Module("@stdlib/generics/Capacitor.zen")
+Resistor = Module("@stdlib/generics/Resistor.zen")
+
+en_strap = config(str, default="PULLUP", allowed=["PULLUP", "PULLDOWN"])
+
+VIN = io(Power(voltage="2.2V to 5.5V"))
+GND = io(Ground)
+EN = io(Net, optional=True)
+VOUT = io(Power(voltage="3.3V"))
+
+Component(
+    name="U1",
+    symbol=Symbol(library="RT9013-33GB.kicad_sym"),
+    pins={"VIN": VIN, "GND": GND, "EN": EN, "VOUT": VOUT},
+)
+
+Capacitor(name="C_in", value="1uF", voltage="10V", package="0402", P1=VIN, P2=GND)
+Capacitor(name="C_out", value="1uF", voltage="10V", package="0402", P1=VOUT, P2=GND)
+
+# EN bias straps: populate one per `en_strap`; EN must never float (datasheet).
+Resistor(name="R_EN_PU", value="100kohm", package="0402", P1=EN, P2=VIN, dnp=en_strap != "PULLUP")
+Resistor(name="R_EN_PD", value="100kohm", package="0402", P1=EN, P2=GND, dnp=en_strap != "PULLDOWN")
+
+Layout(name="RT9013-33GB", path="layout/RT9013-33GB")
+
+# pcb:sch C_in.C x=-300.7200 y=24.4000 rot=0
+# pcb:sch C_out.C x=169.1800 y=37.1000 rot=0
+# pcb:sch EN.0 x=-179.8622 y=107.1880 rot=0
+# pcb:sch GND.0 x=176.8000 y=227.6000 rot=0
+# pcb:sch GND.1 x=-293.1000 y=227.6000 rot=0
+# pcb:sch R_EN_PD.R x=-100.0600 y=126.0000 rot=0
+# pcb:sch R_EN_PU.R x=-112.7600 y=24.4000 rot=-180
+# pcb:sch U1 x=-64.5000 y=-13.7000 rot=0
+# pcb:sch U1.RT9013-33GB x=0.0000 y=127.0000 rot=0
+# pcb:sch VIN.0 x=-288.0200 y=-26.4000 rot=0
+# pcb:sch VOUT.0 x=181.8800 y=-26.4000 rot=0
+# pcb:sch gnd.1 x=0.0000 y=304.8000 rot=0
+# pcb:sch vin.1 x=-279.4000 y=0.0000 rot=0
+# pcb:sch vout.1 x=304.8000 y=0.0000 rot=0
