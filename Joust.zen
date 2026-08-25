@@ -116,3 +116,22 @@ Resistor(name="R_LED_PD", value="100kohm", package="0402", P1=LED_GATE.NET, P2=G
 
 # Programming/debug: Tag-Connect TC2030-NL (zero BOM cost)
 SwdConnector(name="J_SWD", VSENSE=V3V3, GND=GND, SWD=SWD, NRST=RESET_N, SWO=Net("SWO"))
+
+# pcb:sch ACC x=139.7000 y=228.6000 rot=0
+# pcb:sch BLE x=-2032.0000 y=-723.9000 rot=0
+# pcb:sch CHG x=-762.0000 y=-609.6000 rot=0
+# pcb:sch D_MOT.1N4148W-7-F x=-343.9000 y=949.0000 rot=0
+# pcb:sch GND.0 x=-369.3000 y=-115.3000 rot=0
+# pcb:sch GND.1 x=-293.1000 y=-115.3000 rot=0
+# pcb:sch GND.2 x=-128.0000 y=-115.3000 rot=0
+# pcb:sch GND.3 x=11.7000 y=-115.3000 rot=0
+# pcb:sch GND.4 x=392.7000 y=-191.5000 rot=0
+# pcb:sch GND.5 x=75.2000 y=-382.0000 rot=0
+# pcb:sch J_BAT.JPH x=-191.5000 y=748.3000 rot=0
+# pcb:sch J_MOT.JPH x=-26.4000 y=888.0000 rot=0
+# pcb:sch J_SWD.J x=-1956.8000 y=583.2000 rot=0
+# pcb:sch LDO x=762.0000 y=-533.4000 rot=0
+# pcb:sch Q_LED.2N7002 x=75.2000 y=62.5000 rot=0
+# pcb:sch Q_MOT.2N7002 x=316.5000 y=100.6000 rot=0
+# pcb:sch SW_PWR.JS202011SCQN x=1091.2000 y=87.9000 rot=0
+# pcb:sch USB x=-838.2000 y=215.9000 rot=0
