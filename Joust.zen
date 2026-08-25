@@ -22,7 +22,8 @@ SlideSwitch = Module("github.com/diodeinc/registry/components/JS202011SCQN/JS202
 Fet = Module("github.com/diodeinc/registry/components/2N7002/2N7002.zen")
 Flyback = Module("github.com/diodeinc/registry/components/Diodes_Incorporated/1N4148W-7-F/1N4148W-7-F.zen")
 SwdConnector = Module("github.com/diodeinc/registry/connectors/TagConnect/TC2030-NL_SWD.zen")
-Led = Module("@stdlib/generics/Led.zen")
+LoadSwitch = Module("github.com/diodeinc/registry/components/Texas_Instruments/TPS22919/TPS22919.zen")
+Pixel = Module("github.com/diodeinc/registry/components/XINGLIGHT/XL-1010RGBC-WS2812B/XL-1010RGBC-WS2812B.zen")
 Resistor = Module("@stdlib/generics/Resistor.zen")
 
 Board(name="Joust", layout_path="layout/Joust", layers=4)
@@ -39,11 +40,11 @@ SWD = Swd("SWD")
 RESET_N = Net("RESET_N")
 ACC_INT = Gpio("ACC_INT")
 MOT_GATE = Gpio("MOT_GATE")
-LED_GATE = Gpio("LED_GATE")
+LED_EN = Gpio("LED_EN")
+LED_DATA = Gpio("LED_DATA")
 MOT_SW = Net("MOT_SW")
-LED_K = Net("LED_K")
-LED1_A = Net("LED1_A")
-LED2_A = Net("LED2_A")
+LED_PWR = Power("LED_PWR")
+PIX_DI = Net("PIX_DI")
 
 # USB-C charge-only input (D+/D- unused; CC pull-downs request 5 V / 500 mA)
 UsbCSink(name="USB", USB_C=UsbTypeC("USB_C"), VBUS=VBUS, GND=GND)
@@ -82,8 +83,9 @@ Ble(
     SWD=SWD,
     RESET_N=RESET_N,
     GPIO_P0_04=ACC_INT,
+    GPIO_P0_01=LED_DATA,
     GPIO_P1_09=MOT_GATE,
-    GPIO_P1_10=LED_GATE,
+    GPIO_P1_10=LED_EN,
 )
 
 # Accelerometer (LSM6DSOX used accel-only; gyro stays powered down).
@@ -104,15 +106,15 @@ Fet(name="Q_MOT", variant="2N7002K", GATE=MOT_GATE.NET, DRAIN=MOT_SW, SOURCE=GND
 Flyback(name="D_MOT", A=MOT_SW, C=VSYS)
 Resistor(name="R_MOT_PD", value="100kohm", package="0402", P1=MOT_GATE.NET, P2=GND)
 
-# Celebration LEDs: two red LEDs from VSYS, low-side switched.
-# 120 Ω → ~15 mA at 3.7 V; 22 mA worst case at VSYS_REG 4.5 V (USB present),
-# under the KP-1608SURCK 30 mA abs max with margin.
-Resistor(name="R_LED1", value="120ohm", package="0402", P1=VSYS, P2=LED1_A)
-Led(name="D_LED1", color="red", package="0603", mpn="KP-1608SURCK", manufacturer="Kingbright", A=LED1_A, K=LED_K)
-Resistor(name="R_LED2", value="120ohm", package="0402", P1=VSYS, P2=LED2_A)
-Led(name="D_LED2", color="red", package="0603", mpn="KP-1608SURCK", manufacturer="Kingbright", A=LED2_A, K=LED_K)
-Fet(name="Q_LED", variant="2N7002K", GATE=LED_GATE.NET, DRAIN=LED_K, SOURCE=GND)
-Resistor(name="R_LED_PD", value="100kohm", package="0402", P1=LED_GATE.NET, P2=GND)
+# Celebration LED: WS2812B addressable RGB, power-gated from VSYS.
+# Pixel VDD spec is 3.5–5.5 V and static draw is ~0.35 mA, so a TPS22919
+# load switch (default-off, QOD discharge) depowers it outside celebrations.
+# DI threshold is a fixed VIH ≥ 2.8 V — 3.3 V GPIO drives it directly.
+# Below ~3.5 V battery the pixel is out of spec (dimmer/less accurate color).
+# Firmware: keep LED_DATA low whenever LED_EN is off (DI abs max is VDD+0.4 V).
+LoadSwitch(name="U_LEDSW", VIN=VSYS, VOUT=LED_PWR, GND=GND, ON=LED_EN.NET)
+Resistor(name="R_DIN", value="330ohm", package="0402", P1=LED_DATA.NET, P2=PIX_DI)
+Pixel(name="D_PIX", VDD=LED_PWR, GND=GND, DI=PIX_DI, DO=Net("PIX_DO"))
 
 # Programming/debug: Tag-Connect TC2030-NL (zero BOM cost)
 SwdConnector(name="J_SWD", VSENSE=V3V3, GND=GND, SWD=SWD, NRST=RESET_N, SWO=Net("SWO"))
@@ -120,8 +122,6 @@ SwdConnector(name="J_SWD", VSENSE=V3V3, GND=GND, SWD=SWD, NRST=RESET_N, SWO=Net(
 # pcb:sch ACC x=88.9000 y=152.4000 rot=0
 # pcb:sch BLE x=-2032.0000 y=-723.9000 rot=0
 # pcb:sch CHG x=-762.0000 y=-609.6000 rot=0
-# pcb:sch D_LED1.LED x=-864.6000 y=209.8200 rot=-90
-# pcb:sch D_LED2.LED x=-991.6000 y=209.8200 rot=-90
 # pcb:sch D_MOT.1N4148W-7-F x=-1207.5000 y=-219.4000 rot=0
 # pcb:sch GND.0 x=-369.3000 y=-115.3000 rot=0
 # pcb:sch GND.1 x=-293.1000 y=-115.3000 rot=0
@@ -139,11 +139,7 @@ SwdConnector(name="J_SWD", VSENSE=V3V3, GND=GND, SWD=SWD, NRST=RESET_N, SWO=Net(
 # pcb:sch J_MOT.JPH x=-1004.3000 y=-267.7000 rot=0
 # pcb:sch J_SWD.J x=-1956.8000 y=583.2000 rot=0
 # pcb:sch LDO x=762.0000 y=-533.4000 rot=0
-# pcb:sch Q_LED.2N7002 x=-1169.4000 y=214.9000 rot=0
 # pcb:sch Q_MOT.2N7002 x=-1156.7000 y=-178.8000 rot=0
-# pcb:sch R_LED1.R x=-846.8200 y=113.3000 rot=0
-# pcb:sch R_LED2.R x=-973.8200 y=113.3000 rot=0
-# pcb:sch R_LED_PD.R x=-1202.4200 y=303.8000 rot=0
 # pcb:sch R_MOT_PD.R x=-1177.0200 y=-26.4000 rot=-90
 # pcb:sch SW_PWR.JS202011SCQN x=-255.0000 y=1472.2000 rot=0
 # pcb:sch USB x=-838.2000 y=215.9000 rot=0

@@ -130,14 +130,18 @@ All blocks are registry packages; board builds clean (56 components).
 | USB-C charge-only sink (Rd pull-downs, ESD, VBUS TVS) | GCT USB4105 — `modules/UsbCSink16P` |
 | Battery / motor connectors | JST PH 2-pos SMD (B2B-PH-SM4-TB) |
 | Power switch (gates LDO EN; no load current through switch) | C&K JS202011SCQN DPDT slide |
-| Motor + LED low-side switches (100 k gate pulldowns) | 2N7002K, 1N4148W flyback |
-| Celebration LEDs | 2× red 0603 (KP-1608SURCK), 120 Ω from VSYS (~15 mA at 3.7 V, 22 mA max at 4.5 V) |
+| Motor low-side switch (100 k gate pulldown) | 2N7002K, 1N4148W flyback |
+| Celebration LED | WS2812B addressable RGB (XINGLIGHT XL-1010RGBC), power-gated by TPS22919 load switch (default-off, QOD); 330 Ω data series R from P0.01, enable on P1.10 |
 | Programming | Tag-Connect TC2030-NL (SWD, zero BOM cost) |
 
-Design-review outcomes (EE reviewer): LED resistors raised 82 Ω → 120 Ω to
-stay under the LED 30 mA abs max at VSYS_REG = 4.5 V (USB present); all other
-checks passed (power/off-state leakage, charger straps, FET/flyback sizing,
-I²C pull-up placement, SWD/reset, USB CC config).
+Design-review outcomes (EE reviewer): all checks passed (power/off-state
+leakage, charger straps, FET/flyback sizing, I²C pull-up placement, SWD/reset,
+USB CC config).
+
+WS2812B caveats (accepted): pixel VDD spec is 3.5–5.5 V, so below ~3.5 V
+battery it runs out of spec (dimmer / color shift); static draw ~0.35 mA is
+why it is power-gated rather than always-on. Firmware must keep the data line
+low while the pixel is unpowered (DI abs max = VDD + 0.4 V).
 
 Assembly note: the NORA-B2 32.768 kHz crystal (3215, 7 pF) has no house-part
 match — specify an MPN at order time, e.g. Epson FC-135R 32.7680KA-A7 or
