@@ -151,51 +151,56 @@ function corner_pt(h, d) = [sgn(h[0])*(corner_c + d/sqrt(2)), sgn(h[1])*(corner_
 module head_tabs() {
   ty = -pivot[0];                      // |Y| of the pin axis (15)
   tw = tab_x[1] - tab_x[0];
-  for (sy=[-1,1]) for (sx=[-1,1]) {
-    xc = sx*(tab_x[0]+tab_x[1])/2;
-    // vertical tab, rounded around the pin
-    hull() {
-      translate([xc, sy*ty, (z_joint + pivot[1])/2]) cube([tw, tab_y, z_joint - pivot[1]], center=true);
-      translate([xc, sy*ty, pivot[1]]) rotate([0,90,0]) cylinder(d=tab_y + 2, h=tw, center=true);
+  difference() {
+    for (sy=[-1,1]) for (sx=[-1,1]) {
+      xc = sx*(tab_x[0]+tab_x[1])/2;
+      // vertical tab, rounded around the pin
+      hull() {
+        translate([xc, sy*ty, (z_joint + pivot[1])/2]) cube([tw, tab_y, z_joint - pivot[1]], center=true);
+        translate([xc, sy*ty, pivot[1]]) rotate([0,90,0]) cylinder(d=tab_y + 2, h=tw, center=true);
+      }
+      // bridge: from the tab outward into the head's wall, in the space under the board
+      y0 = ty - tab_y/2; y1 = pocket_w/2 + 1.5;
+      translate([xc - tw/2, sy > 0 ? y0 : -y1, z_joint]) cube([tw, y1 - y0, (-board_t - 1.0) - z_joint]);
     }
-    // bridge from the tab outward into the head's wall, below the board
-    translate([xc - tw/2, min(sy*(ty - tab_y/2), sy*(pocket_w/2 + 1)), z_joint])
-      cube([tw, pocket_w/2 + 1 - (ty - tab_y/2), (-board_t - 1.0) - z_joint]);
+    // never intrude on the board itself
+    translate([0,0,-board_t - 0.5]) linear_extrude(10) rr(pocket_w + 1, pocket_w + 1, pocket_r);
   }
 }
 
 module head() {
   difference() {
     union() {
-      body(z_joint, z_top);
-      head_tabs();
+      difference() {
+        body(z_joint, z_top);
+        // --- board pocket
+        translate([0,0,z_joint-1]) linear_extrude(z_funnel0 - z_joint + 1) rr(pocket_w, pocket_w, pocket_r);
+        // --- funnel + chamber + ball socket
+        hull() { rr_slab(z_funnel0-0.01, pocket_w, pocket_w, pocket_r); translate([0,0,z_funnel1]) cylinder(d=chamber_d, h=0.01); }
+        translate([0,0,z_funnel1-0.01]) cylinder(d=chamber_d, h=z_ball - z_funnel1 + 0.02);
+        translate([0,0,z_ball]) sphere(r=ball_r);
+        // --- USB-C slot (-X) and relief
+        translate([-head_w/2, usb_y, usb_h/2]) rotate([0,0,90]) rounded_slot(13, 7, wall*3);
+        translate([-pocket_w/2 - 1.5, usb_y - 5.5, -0.3]) cube([1.6, 11, usb_h + 0.6]);
+        // --- power switch slot (+Y) and relief
+        translate([sw_x, head_w/2, 3.0]) rounded_slot(10, 3.5, wall*3);
+        translate([sw_x - 5, pocket_w/2 - 0.1, -0.3]) cube([10, 1.6, 4.8]);
+      }
+      // --- pin tabs (added after the pocket cut so their bridges survive)
+      intersection() { head_tabs(); body(z_joint - 20, z_top); }
+      // --- hold-down bosses + pegs
+      for (h = holes) translate([h[0], h[1], 0]) {
+        cylinder(d=4.0, h=z_funnel1 + 2);
+        translate([0,0,-(board_t + 0.9)]) cylinder(d=1.8, h=board_t + 1.0);
+      }
+      // --- zip tie bar
+      intersection() {
+        translate([0,0,bar_z]) rotate([90,0,0]) cylinder(d=bar_d, h=head_w, center=true);
+        body(z_joint, z_top);
+      }
     }
-    // --- board pocket
-    translate([0,0,z_joint-1]) linear_extrude(z_funnel0 - z_joint + 1) rr(pocket_w, pocket_w, pocket_r);
-    // --- funnel + chamber + ball socket
-    hull() { rr_slab(z_funnel0-0.01, pocket_w, pocket_w, pocket_r); translate([0,0,z_funnel1]) cylinder(d=chamber_d, h=0.01); }
-    translate([0,0,z_funnel1-0.01]) cylinder(d=chamber_d, h=z_ball - z_funnel1 + 0.02);
-    translate([0,0,z_ball]) sphere(r=ball_r);
-    // --- USB-C slot (-X) and relief
-    translate([-head_w/2, usb_y, usb_h/2]) rotate([0,0,90]) rounded_slot(13, 7, wall*3);
-    translate([-pocket_w/2 - 1.5, usb_y - 5.5, -0.3]) cube([1.6, 11, usb_h + 0.6]);
-    // --- power switch slot (+Y) and relief
-    translate([sw_x, head_w/2, 3.0]) rounded_slot(10, 3.5, wall*3);
-    translate([sw_x - 5, pocket_w/2 - 0.1, -0.3]) cube([10, 1.6, 4.8]);
     // --- pin holes through the tabs
     for (sy=[-1,1]) translate([0, sy*(-pivot[0]), pivot[1]]) rotate([0,90,0]) cylinder(d=pin_d + 0.3, h=head_w, center=true);
-    // --- keep the tab bridges out of the pocket volume the board occupies
-    translate([0,0,-board_t - 0.5]) linear_extrude(10) rr(pocket_w, pocket_w, pocket_r);
-  }
-  // --- hold-down bosses + pegs
-  for (h = holes) translate([h[0], h[1], 0]) {
-    cylinder(d=4.0, h=z_funnel1 + 2);
-    translate([0,0,-(board_t + 0.9)]) cylinder(d=1.8, h=board_t + 1.0);
-  }
-  // --- zip tie bar
-  intersection() {
-    translate([0,0,bar_z]) rotate([90,0,0]) cylinder(d=bar_d, h=head_w, center=true);
-    body(z_joint, z_top);
   }
 }
 
