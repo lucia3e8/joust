@@ -180,9 +180,10 @@ module head() {
         // --- USB-C slot (-X) and relief
         translate([-head_w/2, usb_y, usb_h/2]) rotate([0,0,90]) rounded_slot(13, 7, wall*3);
         translate([-pocket_w/2 - 1.5, usb_y - 5.5, -0.3]) cube([1.6, 11, usb_h + 0.6]);
-        // --- power switch slot (+Y) and relief
-        translate([sw_x, head_w/2, 3.0]) rounded_slot(10, 3.5, wall*3);
-        translate([sw_x - 5, pocket_w/2 - 0.1, -0.3]) cube([10, 1.6, 4.8]);
+        // --- power switch (+Y): fingertip-sized pill so the knob 3 mm inside the
+        //     wall can be slid with a finger pad, not just a nail
+        translate([sw_x, head_w/2, 3.2]) rounded_slot(12, 6, wall*3);
+        translate([sw_x - 5.5, pocket_w/2 - 0.1, -0.3]) cube([11, 1.1, 5.3]);
       }
       // --- pin tabs (added after the pocket cut so their bridges survive)
       intersection() { head_tabs(); body(z_joint - 20, z_top); }
