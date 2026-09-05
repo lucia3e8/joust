@@ -1,4 +1,8 @@
-# Joust wand enclosure
+# Joust wand enclosure (organic branch)
+
+Experimental variant: one continuous superellipse body from butt to ball lip,
+no visible fasteners. The head is held by two 3 mm pins through the grip's side
+walls and tabs hanging from the head; the front pin doubles as the trigger pivot.
 
 Code-driven CAD for the handheld shell, in OpenSCAD. You never open a modeling
 tool: edit numbers in `joust_wand.scad` (or ask Claude to), press F5 in
@@ -15,12 +19,12 @@ openscad -D 'view="trigger"' -o joust_trigger.stl joust_wand.scad
 
 | Part | Print orientation | Notes |
 |---|---|---|
-| head | upside down on its ring, with a brim (or right side up with supports under the four bosses) | board pocket, light funnel, ball cup, USB and power-switch slots |
-| grip | butt down | pillars for the board, screw bosses, trigger slot, battery ribs, motor pocket, strap hole |
+| head | upside down on its lip, with a brim (or right side up with supports under bosses and tabs) | board pocket, light funnel, ball lip, four pin tabs, USB and power-switch slots |
+| grip | butt down | pillars for the board, pin bosses, trigger slot, battery ribs, motor pocket, strap hole |
 | trigger | on its side | pivots on a 3 mm pin |
 
-Hardware: 2x M2x8 self-tapping screws, one 40 mm length of 3 mm filament or
-M3 rod for the trigger pin, a 6x6x5 mm through-hole tactile switch, a 40 mm
+Hardware: two 40 mm lengths of 3 mm filament or M3 rod (front pin is also the
+trigger pivot), a 6x6x5 mm through-hole tactile switch, a 40 mm
 ping-pong ball, one 2.5 mm zip tie, a 502030 LiPo, a 10 mm coin ERM motor.
 
 ## Assembly
@@ -32,12 +36,13 @@ ping-pong ball, one 2.5 mm zip tie, a 502030 LiPo, a 10 mm coin ERM motor.
    across the light chamber, close the tie and pull tight. Trim the tail.
 2. Push the tact switch into the pocket on the bridge inside the grip, leads
    out the back. Wire it to the board's button input.
-3. Drop the trigger into the grip from the top, paddle out through the slot,
-   and push the pin through both side walls.
+3. Drop the trigger into the grip from the top, paddle out through the slot.
+   Leave the pins out for now.
 4. Battery between the ribs, motor in its pocket, wires up.
 5. Board onto the four pillars, top side up, USB toward the -X face.
-6. Head on top: pegs go through the board holes into the pillars. Two M2
-   screws through the head's front and back faces into the grip bosses.
+6. Head on top: pegs go through the board holes into the pillars, tabs slide
+   down inside the grip. Push both pins through the side walls, through the
+   tabs (and the trigger hub on the front one). Trim flush.
 
 ## Board assumptions baked into the model
 
