@@ -6,29 +6,28 @@
 // (Y_here = -Y_kicad), so looking down from the ball you see the board as in
 // the KiCad editor.
 //
-// Parts:  head     — board pocket, light chamber, ball lip, two hanging tabs
-//         grip     — handle, battery ribs, motor pocket, trigger mechanism
-//         trigger  — lever, pivots on a 3 mm pin through the grip walls
+// Parts:  head — board pocket, light chamber, ball lip, four hanging tabs
+//         grip — handle, haptic motor shelf under the board, battery ribs
 //
 // Fastening: two 3 mm pins pass through the grip side walls and the head's
-// tabs at the same height. The front pin is also the trigger pivot. Push the
-// pins out to remove the head. The only visible hardware is four flush dots.
+// tabs. Push the pins out to remove the head. The only visible hardware is
+// four flush dots.
 //
 // Board orientation inside the wand:
 //   -X face : USB-C receptacle (charging slot)
 //   +Y face : power slide switch (slot)
-//   -Y face : BLE module antenna edge (keep metal away) — trigger side below
+//   -Y face : BLE module antenna edge (keep metal away)
 //   bottom  : JST PH battery + motor connectors face down into the grip
 //
 // Print: head upside-down on its lip with a brim (or right-side up with supports
-// under the bosses/tabs), grip butt-down, trigger on its side.
-// Hardware: 2x 3 mm pins 40 mm long (filament or M3 rod), 6x6x5 THT tactile
-// switch, ping-pong ball, one 2.5 mm zip tie.
+// under the bosses/tabs), grip butt-down.
+// Hardware: 2x 3 mm pins 40 mm long (filament or M3 rod), 12x3.4 mm coin ERM
+// haptic motor, ping-pong ball, one 2.5 mm zip tie.
 //
 // Set `view` below or from the CLI:  openscad -D 'view="head"' -o head.stl joust_wand.scad
 
-view = "assembly";   // assembly | exploded | section | head | grip | trigger
-$fn = (view == "head" || view == "grip" || view == "trigger") ? 96 : 48;
+view = "assembly";   // assembly | exploded | section | head | grip
+$fn = (view == "head" || view == "grip") ? 96 : 48;
 step = (view == "head" || view == "grip") ? 1.5 : 3;   // loft station spacing (mm)
 
 // ---------------------------------------------------------------- board ----
@@ -70,27 +69,26 @@ z_web      = -16;
 // ball retention
 tie_hole_r = 10;  tie_hole_d = 3.5;  bar_z = 8;  bar_d = 3;
 
-// ------------------------------------------------------------- trigger ----
-trig_x_w   = 16;
-lever_w    = 13;
-pivot      = [-15.0, -20];
+// -------------------------------------------------------------- pins ------
+pin_y      = 15;                     // |Y| of both pin axes
+pin_z      = -20;
 pin_d      = 3.0;  pin_len = 39.5;
-slot_z     = [-47, -22];
-paddle_top = [-16.5, -23];
-paddle_tip = [-24.5, -42];
-paddle_t   = 3.6;
-bridge_z   = -32;  bridge_h = 6.5;  bridge_y = [-11, -3];
-tact_body  = 6.2;  tact_depth = 3.5;
-tact_btn_y = bridge_y[0] - (5 - tact_depth) - 1.0;
-nub_gap    = 0.5;
 
-// head tabs: hang down inside the grip, pinned at pivot height on both faces
+// ------------------------------------------------------- haptic motor -----
+// 12 x 3.4 mm coin ERM (e.g. Precision Microdrives 312-101 or generic "1234"),
+// stuck into a pocket on a shelf under the board, leads exit toward J_MOT (+X).
+motor_d    = 12.0;  motor_t = 3.4;
+motor_clr  = 0.25;
+shelf_x    = 16;                     // shelf width (X), clears JST plugs and head tabs
+shelf_top  = -10.4;                  // just below the joint plane
+shelf_t    = motor_t + 0.8;
+
+// head tabs: hang down inside the grip, pinned on both faces
 tab_x      = [8.6, 11.1];            // |X| range (clears lever hub and pillars)
 tab_y      = 4.0;                    // thickness around the pin axis
 tab_bot    = -25;
 
 batt       = [21, 6.5, 33];
-motor_d    = 10.6;  motor_t = 3.6;
 
 // ====================================================== body profile ======
 // keyframes: [z, width_x, width_y, superellipse exponent], ascending z.
@@ -149,15 +147,15 @@ function corner_pt(h, d) = [sgn(h[0])*(corner_c + d/sqrt(2)), sgn(h[1])*(corner_
 
 // ============================================================== HEAD ======
 module head_tabs() {
-  ty = -pivot[0];                      // |Y| of the pin axis (15)
+  ty = pin_y;
   tw = tab_x[1] - tab_x[0];
   difference() {
     for (sy=[-1,1]) for (sx=[-1,1]) {
       xc = sx*(tab_x[0]+tab_x[1])/2;
       // vertical tab, rounded around the pin
       hull() {
-        translate([xc, sy*ty, (z_joint + pivot[1])/2]) cube([tw, tab_y, z_joint - pivot[1]], center=true);
-        translate([xc, sy*ty, pivot[1]]) rotate([0,90,0]) cylinder(d=tab_y + 2, h=tw, center=true);
+        translate([xc, sy*ty, (z_joint + pin_z)/2]) cube([tw, tab_y, z_joint - pin_z], center=true);
+        translate([xc, sy*ty, pin_z]) rotate([0,90,0]) cylinder(d=tab_y + 2, h=tw, center=true);
       }
       // bridge: from the tab outward into the head's wall, in the space under the board
       y0 = ty - tab_y/2; y1 = pocket_w/2 + 1.5;
@@ -200,7 +198,7 @@ module head() {
       }
     }
     // --- pin holes through the tabs
-    for (sy=[-1,1]) translate([0, sy*(-pivot[0]), pivot[1]]) rotate([0,90,0]) cylinder(d=pin_d + 0.3, h=head_w, center=true);
+    for (sy=[-1,1]) translate([0, sy*pin_y, pin_z]) rotate([0,90,0]) cylinder(d=pin_d + 0.3, h=head_w, center=true);
   }
 }
 
@@ -228,58 +226,28 @@ module grip() {
     union() {
       difference() { body(z_bot, z_joint); grip_cavity(); }
       for (h = holes) pillar(h);
-      // trigger switch bridge
-      translate([0, (bridge_y[0]+bridge_y[1])/2, bridge_z]) cube([44, bridge_y[1]-bridge_y[0], bridge_h], center=true);
+      // haptic motor shelf: spans the cavity front to back, under the board center
+      translate([-shelf_x/2, -head_w/2, shelf_top - shelf_t]) cube([shelf_x, head_w, shelf_t]);
       // battery ribs (+Y wall)
       for (s=[-1,1]) translate([s*(batt[0]/2 + 1.5/2 + 0.25), 13, -77.5]) cube([1.5, 9, batt[2]+2], center=true);
       // pin bosses on both inner side walls, both faces
-      for (sx=[-1,1]) for (sy=[-1,1]) translate([sx*17, sy*(-pivot[0]), pivot[1]]) rotate([0,90,0]) cylinder(d=7, h=10, center=true);
-      // motor cradle (+Y wall)
-      translate([0, 13.5, -112]) cube([motor_d+4, 8, motor_d+4], center=true);
+      for (sx=[-1,1]) for (sy=[-1,1]) translate([sx*17, sy*pin_y, pin_z]) rotate([0,90,0]) cylinder(d=7, h=10, center=true);
     }
     // trim to the outer skin
     difference() { translate([0,0,-200]) cube(400, center=true); body(z_bot, z_joint); }
 
     for (h = holes) translate([h[0], h[1], -board_t - 1.5]) cylinder(d=2.0, h=3);
-    // tact switch pocket + lead hole
-    translate([0, bridge_y[0] - 0.01, bridge_z]) rotate([-90,0,0]) { linear_extrude(tact_depth + 0.01) square(tact_body, center=true); cylinder(d=4, h=20); }
-    // motor pocket
-    translate([0, 9.5 - 0.01, -112]) rotate([-90,0,0]) cylinder(d=motor_d, h=motor_t + 0.02);
-    // trigger slot (-Y)
-    hull() for (z = [slot_z[0] + trig_x_w/2, slot_z[1] - trig_x_w/2]) translate([0, -19, z]) rotate([90,0,0]) cylinder(d=trig_x_w, h=12, center=true);
+    // motor pocket in the shelf, open upward; lead notch toward J_MOT on +X
+    translate([0, 0, shelf_top - motor_t - motor_clr]) cylinder(d=motor_d + 2*motor_clr, h=motor_t + motor_clr + 1);
+    translate([motor_d/2 - 1, -1.5, shelf_top - 2.0]) cube([shelf_x/2 - motor_d/2 + 2, 3, 3]);
     // pin holes, both faces
-    for (sy=[-1,1]) translate([0, sy*(-pivot[0]), pivot[1]]) rotate([0,90,0]) cylinder(d=pin_d + 0.25, h=head_w + 2, center=true);
+    for (sy=[-1,1]) translate([0, sy*pin_y, pin_z]) rotate([0,90,0]) cylinder(d=pin_d + 0.25, h=head_w + 2, center=true);
     // wrist strap
     translate([0, 0, -145]) rotate([0,90,0]) cylinder(d=3.5, h=60, center=true);
   }
 }
 
-// ============================================================ TRIGGER =====
-function paddle_y_at(z) = paddle_top[0] + (paddle_tip[0]-paddle_top[0]) * (z - paddle_top[1]) / (paddle_tip[1]-paddle_top[1]);
-
-module trigger() {
-  bore = pin_d + 0.3;
-  nub_tip = tact_btn_y - nub_gap;
-  rotate([90,0,90]) difference() {
-    union() {
-      linear_extrude(lever_w + 3, center=true) translate(pivot) circle(r=3.2);
-      // paddle: soft pill, slightly bellied, narrowing toward the tip
-      hull() {
-        linear_extrude(lever_w, center=true) translate(pivot) circle(r=3.2);
-        linear_extrude(lever_w, center=true) translate(paddle_top) circle(d=paddle_t);
-        linear_extrude(lever_w - 2, center=true) translate([(paddle_top[0]+paddle_tip[0])/2 - 0.8, (paddle_top[1]+paddle_tip[1])/2]) circle(d=paddle_t + 1.2);
-        linear_extrude(lever_w - 4, center=true) translate(paddle_tip) circle(d=paddle_t);
-      }
-      linear_extrude(5, center=true) hull() {
-        translate([paddle_y_at(bridge_z), bridge_z]) circle(d=paddle_t);
-        translate([nub_tip - 1.5, bridge_z]) circle(d=3);
-      }
-    }
-    linear_extrude(lever_w + 8, center=true) translate(pivot) circle(d=bore);
-  }
-}
-
-module pins() { for (sy=[-1,1]) translate([0, sy*(-pivot[0]), pivot[1]]) rotate([0,90,0]) cylinder(d=pin_d, h=pin_len, center=true); }
+module pins() { for (sy=[-1,1]) translate([0, sy*pin_y, pin_z]) rotate([0,90,0]) cylinder(d=pin_d, h=pin_len, center=true); }
 
 // ========================================================== reference =====
 module board() {
@@ -308,17 +276,16 @@ module tie() {
   }
 }
 module lipo()  { color("#5060c0") translate([-batt[0]/2, 14.9 - batt[1], -77.5 - batt[2]/2]) cube(batt); }
-module tact()  { color("#333") translate([-3, tact_btn_y + 1.0, bridge_z - 3]) cube([6, 5, 6]); color("#888") translate([-1.75, tact_btn_y, bridge_z-1.75]) cube([3.5, 1.0, 3.5]); }
+module motor() { color("#777") translate([0, 0, shelf_top - motor_t]) cylinder(d=motor_d, h=motor_t); }
 
 // ============================================================= views ======
 module assembly(explode=0) {
   color("#e8e8e8") translate([0,0, explode*1.0]) head();
   color("#dcdcdc") translate([0,0,-explode*1.0]) grip();
-  color("#e05a2b") translate([0,-explode*0.6,-explode*1.0]) trigger();
   color("#666")    translate([explode*0.9,0,-explode*1.0]) pins();
   translate([0,0,explode*1.6]) { ball(); tie(); }
   board();
-  translate([0,0,-explode*1.0]) { lipo(); tact(); }
+  translate([0,0,-explode*1.0]) { lipo(); motor(); }
 }
 
 if (view == "assembly") assembly(0);
@@ -326,4 +293,3 @@ if (view == "exploded") assembly(35);
 if (view == "section")  difference() { assembly(0); translate([0,-200,-300]) cube([200,400,600]); }
 if (view == "head")     head();
 if (view == "grip")     grip();
-if (view == "trigger")  trigger();

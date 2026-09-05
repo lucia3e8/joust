@@ -1,8 +1,8 @@
 # Joust wand enclosure (organic branch)
 
 Experimental variant: one continuous superellipse body from butt to ball lip,
-no visible fasteners. The head is held by two 3 mm pins through the grip's side
-walls and tabs hanging from the head; the front pin doubles as the trigger pivot.
+no visible fasteners, no trigger. The head is held by two 3 mm pins through the
+grip's side walls and tabs hanging from the head.
 
 Code-driven CAD for the handheld shell, in OpenSCAD. You never open a modeling
 tool: edit numbers in `joust_wand.scad` (or ask Claude to), press F5 in
@@ -12,7 +12,6 @@ OpenSCAD to preview, F6 + export for STL.
 # preview images / STLs from the terminal
 openscad -D 'view="head"'    -o joust_head.stl    joust_wand.scad
 openscad -D 'view="grip"'    -o joust_grip.stl    joust_wand.scad
-openscad -D 'view="trigger"' -o joust_trigger.stl joust_wand.scad
 ```
 
 ## Parts
@@ -20,12 +19,12 @@ openscad -D 'view="trigger"' -o joust_trigger.stl joust_wand.scad
 | Part | Print orientation | Notes |
 |---|---|---|
 | head | upside down on its lip, with a brim (or right side up with supports under bosses and tabs) | board pocket, light funnel, ball lip, four pin tabs, USB and power-switch slots |
-| grip | butt down | pillars for the board, pin bosses, trigger slot, battery ribs, motor pocket, strap hole |
-| trigger | on its side | pivots on a 3 mm pin |
+| grip | butt down | pillars for the board, pin bosses, haptic motor shelf, battery ribs, strap hole |
 
-Hardware: two 40 mm lengths of 3 mm filament or M3 rod (front pin is also the
-trigger pivot), a 6x6x5 mm through-hole tactile switch, a 40 mm
-ping-pong ball, one 2.5 mm zip tie, a 502030 LiPo, a 10 mm coin ERM motor.
+Hardware: two 40 mm lengths of 3 mm filament or M3 rod, a 40 mm ping-pong
+ball, one 2.5 mm zip tie, a 502030 LiPo, and a 12 x 3.4 mm coin ERM haptic
+motor (Precision Microdrives 312-101 or a generic "1234" coin, 3 V, ~75 mA)
+with a JST PH pigtail.
 
 ## Assembly
 
@@ -34,15 +33,14 @@ ping-pong ball, one 2.5 mm zip tie, a 502030 LiPo, a 10 mm coin ERM motor.
    the other (it curves along the inside of the shell on its own). Seat the
    ball in the cup, pass both tie ends down into the head, loop under the bar
    across the light chamber, close the tie and pull tight. Trim the tail.
-2. Push the tact switch into the pocket on the bridge inside the grip, leads
-   out the back. Wire it to the board's button input.
-3. Drop the trigger into the grip from the top, paddle out through the slot.
-   Leave the pins out for now.
-4. Battery between the ribs, motor in its pocket, wires up.
-5. Board onto the four pillars, top side up, USB toward the -X face.
-6. Head on top: pegs go through the board holes into the pillars, tabs slide
-   down inside the grip. Push both pins through the side walls, through the
-   tabs (and the trigger hub on the front one). Trim flush.
+2. Battery between the ribs, wires up.
+3. Stick the coin motor into the pocket on the shelf, leads out the +X notch
+   to the board's motor connector.
+4. Board onto the four pillars, top side up, USB toward the -X face. Plug in
+   battery and motor.
+5. Head on top: pegs go through the board holes into the pillars, tabs slide
+   down inside the grip. Push both pins through the side walls and tabs.
+   Trim flush.
 
 ## Board assumptions baked into the model
 
